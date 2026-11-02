@@ -1,7 +1,7 @@
 /**
  * The single gateway for every fmkorea request.
- * Provisional implementation: direct fetch from the extension context with the user's cookies.
- * If the Task 2 probe shows this is blocked, swap the body for a content-script fetch in an fmkorea tab.
+ * Direct fetch from the extension context with the user's cookies — verified on 2026-11-02 to pass
+ * fmkorea's security check (see spec §5 step 0). Callers wrap it with createPoliteFetch.
  * @param {string} url
  * @param {AbortSignal} [signal]
  * @returns {Promise<{ status: number, html: string }>}
