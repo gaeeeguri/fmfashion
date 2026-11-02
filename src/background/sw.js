@@ -1,4 +1,4 @@
-import { refreshDictionary } from '../lib/dictionaryStore.js';
+import { refreshDictionary, getDictionary } from '../lib/dictionaryStore.js';
 
 const ALARM = 'dict';
 const refresh = () => refreshDictionary(chrome.storage.local, (url) => fetch(url, { cache: 'no-cache' }), Date.now());
@@ -20,6 +20,10 @@ chrome.alarms.onAlarm.addListener((a) => {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === 'refreshDictionary') {
     refresh().then(sendResponse, () => sendResponse('failed'));
+    return true;
+  }
+  if (msg?.type === 'getDictionary') {
+    getDictionary(chrome.storage.local).then(sendResponse, () => sendResponse(null));
     return true;
   }
 });
