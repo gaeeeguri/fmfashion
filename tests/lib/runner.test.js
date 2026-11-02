@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { test, expect } from 'vitest';
 import fs from 'node:fs';
-import { runSearch } from '../../src/lib/runner.js';
+import { runSearch, abortableSleep } from '../../src/lib/runner.js';
 
 const LIST = fs.readFileSync('tests/fixtures/search-result.html', 'utf8');
 const BLOCKED = fs.readFileSync('tests/fixtures/blocked-430.html', 'utf8');
@@ -68,4 +68,26 @@ test('passes page and categoryId into url and reports progress', async () => {
   expect(f.calls[0]).toContain('page=2');
   expect(f.calls[0]).toContain('category=18910473');
   expect(progress).toEqual([{ done: 0, total: 2, term: 'a' }, { done: 1, total: 2, term: 'b' }]);
+});
+
+test('unrecognized page (no list table) returns error', async () => {
+  const f = fakeFetch([{ status: 200, html: '<html><body>로그인이 필요합니다</body></html>' }]);
+  const seen = [];
+  const res = await runSearch({ jobs, fetchPage: f.fetchPage, sleep, onRows: (r) => seen.push(r) });
+  expect(res).toEqual({ status: 'error', completed: 0, reason: 'unrecognized' });
+  expect(seen).toEqual([]);
+});
+test('job-level page overrides run page', async () => {
+  const f = fakeFetch([]);
+  await runSearch({ jobs: [{ ...jobs[0], page: 3 }, jobs[1]], page: 1, fetchPage: f.fetchPage, sleep, onRows: () => {} });
+  expect(f.calls[0]).toContain('page=3');
+  expect(f.calls[1]).toContain('page=1');
+});
+test('abortableSleep resolves early on abort', async () => {
+  const ctl = new AbortController();
+  const t0 = Date.now();
+  const p = abortableSleep(5000, ctl.signal);
+  setTimeout(() => ctl.abort(), 10);
+  await p;
+  expect(Date.now() - t0).toBeLessThan(1000);
 });

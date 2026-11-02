@@ -74,6 +74,16 @@ export function parseListHtml(html) {
   return parseListDocument(doc).map((x) => x.row);
 }
 
+/**
+ * fmkorea wraps every board list/search page in `div.bd_lst_wrp`, even with zero results
+ * (the `table.bd_lst` itself is omitted then). Its absence on a non-blocked page means the
+ * markup changed or we got some other page.
+ * @param {string} html
+ */
+export function hasListTable(html) {
+  return /class="[^"]*\bbd_lst_wrp\b/.test(html);
+}
+
 /** @param {string} html */
 export function isBlockedHtml(html) {
   return html.includes(BLOCKED_MARKER);

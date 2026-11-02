@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { test, expect } from 'vitest';
 import fs from 'node:fs';
-import { parseListHtml, isBlockedHtml } from '../../src/lib/parser.js';
+import { parseListHtml, isBlockedHtml, hasListTable } from '../../src/lib/parser.js';
 
 const read = (f) => fs.readFileSync(`tests/fixtures/${f}`, 'utf8');
 
@@ -41,4 +41,13 @@ test('blocked page detected', () => {
   expect(isBlockedHtml(read('blocked-430.html'))).toBe(true);
   expect(isBlockedHtml(read('board-list.html'))).toBe(false);
   expect(parseListHtml(read('blocked-430.html'))).toEqual([]);
+});
+test('zero-result search page still has the list table', () => {
+  const html = read('search-empty.html');
+  expect(hasListTable(html)).toBe(true);
+  expect(parseListHtml(html)).toEqual([]);
+});
+test('unrecognized page has no list table', () => {
+  expect(hasListTable('<html><body><p>로그인이 필요합니다</p></body></html>')).toBe(false);
+  expect(hasListTable(read('board-list.html'))).toBe(true);
 });

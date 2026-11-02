@@ -8,6 +8,7 @@
  */
 
 export const SCHEMA_VERSION = 1;
+export const DEFAULT_CATEGORY_KEY = 'all';
 
 const isStr = (v) => typeof v === 'string' && v.length > 0;
 const isStrArr = (v, allowEmpty = true) =>
@@ -33,10 +34,15 @@ export function validateDictionary(raw) {
   if (!isStr(d.version) || !isStr(d.updatedAt) || Number.isNaN(Date.parse(d.updatedAt))) return null;
 
   if (!Array.isArray(d.categories) || d.categories.length === 0) return null;
+  const catKeys = new Set();
   for (const c of d.categories) {
     if (!c || !isStr(c.key) || !isStr(c.name) || !isStrArr(c.ids)) return null;
     if (c.excludeIds !== undefined && !isStrArr(c.excludeIds)) return null;
+    if (catKeys.has(c.key)) return null;
+    catKeys.add(c.key);
   }
+  // settings fall back to 'all', so it must exist
+  if (!catKeys.has(DEFAULT_CATEGORY_KEY)) return null;
 
   if (!Array.isArray(d.groups)) return null;
   const groupIds = new Set();

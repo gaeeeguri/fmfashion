@@ -33,3 +33,13 @@ test('pickNewer keeps current when incoming null or older', () => {
   expect(pickNewer(bundled, null)).toBe(bundled);
   expect(pickNewer(bundled, { ...bundled, updatedAt: '2000-01-01T00:00:00+09:00' })).toBe(bundled);
 });
+test('rejects dictionary without an all category', () => {
+  const d = structuredClone(bundled);
+  d.categories = d.categories.filter((c) => c.key !== 'all');
+  expect(validateDictionary(d)).toBeNull();
+});
+test('rejects duplicate category keys', () => {
+  const d = structuredClone(bundled);
+  d.categories.push({ ...d.categories[1] });
+  expect(validateDictionary(d)).toBeNull();
+});
