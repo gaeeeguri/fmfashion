@@ -4,7 +4,7 @@ import { join, dirname } from 'node:path';
 
 const SRC = 'src';
 const OUT = 'dist';
-const ENTRIES = ['background/sw.js', 'popup/popup.js', 'results/results.js', 'content/board.js'];
+const ENTRIES = ['spike/probe.js', 'background/sw.js', 'popup/popup.js', 'results/results.js', 'content/board.js'];
 const STATIC = /\.(html|css|png|json)$/;
 
 rmSync(OUT, { recursive: true, force: true });
