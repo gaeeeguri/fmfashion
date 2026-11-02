@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>브랜드 모아보기 · 펨코 패션</title>
+  <link rel="stylesheet" href="results.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="head">
+      <h1>브랜드 모아보기</h1>
+      <div class="filters">
+        <span class="cat" id="cat"></span>
+        <span id="brand-chips" class="chips"></span>
+      </div>
+      <p class="alias" id="alias"></p>
+    </header>
+
+    <div class="status" id="status" role="status" aria-live="polite">
+      <span id="status-text"></span>
+      <button class="link" id="cancel" hidden>취소</button>
+      <button class="link" id="refresh" hidden>새로고침</button>
+    </div>
+    <p class="note" id="capped" hidden></p>
+
+    <table class="list" id="list" hidden>
+      <thead>
+        <tr><th class="c-cat">탭</th><th>제목</th><th class="c-author">글쓴이</th><th class="c-time">날짜</th><th class="c-num">조회</th><th class="c-num">추천</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="empty" id="empty" hidden>조건에 맞는 글이 없어요.</p>
+
+    <div class="more"><button class="btn" id="more" hidden>더 보기</button></div>
+  </main>
+  <script src="results.js"></script>
+</body>
+</html>

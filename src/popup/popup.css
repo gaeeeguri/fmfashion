@@ -1,0 +1,39 @@
+:root {
+  --bg: #fff; --fg: #1a1a1a; --muted: #888; --faint: #999; --line: #e3e3e6; --soft: #f1f1f3; --foot: #fafafb;
+  --blue: #3b5bfd; --blue-bg: #eef1ff; --blue-fg: #2a45d8;
+  --red: #e5484d; --red-bg: #fff0f0; --red-fg: #c8323a; --dim: #c4c4c4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1f; --fg: #ececf0; --muted: #9a9aa3; --faint: #85858e; --line: #3a3a40; --soft: #2a2a2f; --foot: #222226;
+    --blue-bg: #232a4d; --blue-fg: #aebcff; --red-bg: #3d2224; --red-fg: #ff9a9e; --dim: #5a5a60;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.pp { width: 340px; }
+.pp-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px; }
+.pp-h b { font-size: 15px; }
+.pp-h span { font-size: 11px; color: var(--muted); }
+.mode { display: flex; margin: 0 16px 12px; background: var(--soft); border-radius: 9px; padding: 3px; }
+.mode button { flex: 1; border: 0; background: none; padding: 7px; border-radius: 7px; color: var(--muted); }
+.mode button.on { background: var(--bg); color: var(--fg); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.tabs { display: flex; gap: 6px; padding: 0 16px 10px; flex-wrap: wrap; }
+.tab { border: 0; padding: 5px 11px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 12px; }
+.tab.on { background: var(--fg); color: var(--bg); }
+.sec { padding: 2px 16px 10px; max-height: 340px; overflow-y: auto; }
+.sec .t { font-size: 11px; color: var(--faint); margin: 8px 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; background: var(--bg); }
+.chip.on { border-color: var(--blue); background: var(--blue-bg); color: var(--blue-fg); font-weight: 600; }
+.chip.hide { border-color: var(--red); background: var(--red-bg); color: var(--red-fg); font-weight: 600; }
+.chip:disabled { color: var(--dim); border-style: dashed; cursor: not-allowed; }
+.alias { font-size: 11px; color: var(--muted); margin: 0; padding: 0 16px 10px; line-height: 1.5; }
+.note { font-size: 11px; color: var(--faint); padding: 0 16px; margin: 0 0 4px; }
+.foot { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--foot); }
+.btn { flex: 1; border: 0; text-align: center; padding: 9px; border-radius: 8px; font-weight: 600; }
+.btn.p { background: var(--blue); color: #fff; }
+.btn.p:disabled { background: var(--line); color: var(--muted); cursor: default; }
+.btn.r { background: var(--red); color: #fff; }
+.btn.s { background: var(--bg); border: 1px solid var(--line); color: var(--muted); flex: 0 0 auto; padding: 9px 12px; }
