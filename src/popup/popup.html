@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>패션 브랜드 필터</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main class="pp">
+    <header class="pp-h"><b>패션 브랜드 필터</b><span id="dict-version"></span></header>
+    <div class="mode" role="tablist">
+      <button role="tab" id="tab-view" class="on" aria-selected="true">보기</button>
+      <button role="tab" id="tab-hide" aria-selected="false">숨기기</button>
+    </div>
+
+    <section id="pane-view">
+      <div class="tabs" id="categories" role="radiogroup" aria-label="카테고리"></div>
+      <div class="sec" id="view-groups"></div>
+      <p class="alias" id="alias-summary" hidden></p>
+      <footer class="foot">
+        <button class="btn s" id="reset">초기화</button>
+        <button class="btn p" id="go" disabled>브랜드를 골라주세요</button>
+      </footer>
+    </section>
+
+    <section id="pane-hide" hidden>
+      <p class="note">고른 브랜드는 패션 게시판 목록과 검색 결과에서 보이지 않아요.</p>
+      <div class="sec" id="hide-groups"></div>
+      <footer class="foot">
+        <button class="btn s" id="clear-hidden">모두 해제</button>
+        <button class="btn r" id="save-hidden">저장</button>
+      </footer>
+    </section>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
