@@ -2,3 +2,4 @@ node_modules/
 dist/
 .superpowers/
 *.zip
+tests/fixtures/

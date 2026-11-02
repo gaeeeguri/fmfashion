@@ -1,17 +1,18 @@
 // @vitest-environment jsdom
 import { test, expect, beforeEach } from 'vitest';
-import fs from 'node:fs';
+import { fixture, ftest, HAS_FIXTURES } from './fixtures.js';
 import bundled from '../../dictionary/brands.json';
 import { compileMatchers } from '../../src/lib/matcher.js';
 import { isFashionListUrl, applyHiding } from '../../src/lib/boardPage.js';
 
 const B = 'https://www.fmkorea.com';
-const HTML = fs.readFileSync('tests/fixtures/board-list.html', 'utf8');
+const HTML = fixture('board-list.html');
 const matchers = compileMatchers(bundled);
 let doc;
 let target;
 
 beforeEach(() => {
+  if (!HAS_FIXTURES) return;
   doc = new DOMParser().parseFromString(HTML, 'text/html');
   target = [...doc.querySelectorAll('tr:not(.notice) td.title > a:not(.replyNum)')][3];
   target.textContent = '파프터 CS 또 터짐';
@@ -30,7 +31,7 @@ test.each([
   [`${B}/fashionista`, false],
 ])('isFashionListUrl(%s) = %s', (url, want) => expect(isFashionListUrl(url)).toBe(want));
 
-test('hides matching rows and counts', () => {
+ftest('hides matching rows and counts', () => {
   const { hiddenCount } = applyHiding(doc, ['fafter'], matchers);
   expect(hiddenCount).toBe(1);
   const tr = target.closest('tr');
@@ -38,24 +39,24 @@ test('hides matching rows and counts', () => {
   expect(tr.style.display).toBe('none');
   expect(doc.getElementById('fmf-bar').textContent).toContain('숨긴 글 1개');
 });
-test('no bar when nothing hidden', () => {
+ftest('no bar when nothing hidden', () => {
   expect(applyHiding(doc, [], matchers).hiddenCount).toBe(0);
   expect(doc.getElementById('fmf-bar')).toBeNull();
 });
-test('idempotent', () => {
+ftest('idempotent', () => {
   applyHiding(doc, ['fafter'], matchers);
   const { hiddenCount } = applyHiding(doc, ['fafter'], matchers);
   expect(hiddenCount).toBe(1);
   expect(doc.querySelectorAll('#fmf-bar').length).toBe(1);
 });
-test('unhiding restores rows and removes bar', () => {
+ftest('unhiding restores rows and removes bar', () => {
   applyHiding(doc, ['fafter'], matchers);
   applyHiding(doc, [], matchers);
   expect(target.closest('tr').style.display).toBe('');
   expect(target.closest('tr').dataset.fmfHidden).toBeUndefined();
   expect(doc.getElementById('fmf-bar')).toBeNull();
 });
-test('toggle shows and rehides', () => {
+ftest('toggle shows and rehides', () => {
   applyHiding(doc, ['fafter'], matchers);
   const btn = doc.querySelector('#fmf-bar button');
   btn.click();

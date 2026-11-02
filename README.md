@@ -11,6 +11,8 @@ npm run build     # → dist/
 npm run zip       # → fmfashion-<version>.zip (웹스토어 업로드용)
 ```
 
+파서·실행기 테스트 일부는 펨코 페이지 스냅샷(`tests/fixtures/*.html`)을 씁니다. 다른 사용자 닉네임이 들어 있어 저장소에는 포함하지 않으며, 파일이 없으면 해당 테스트는 건너뜁니다(`tests/lib/fixtures.js` 참고: `board-list.html`, `search-result.html`, `search-empty.html`, `blocked-430.html`).
+
 크롬 `chrome://extensions` → 개발자 모드 → "압축해제된 확장 프로그램 로드" → `dist/` 선택.
 
 ## 브랜드 사전
