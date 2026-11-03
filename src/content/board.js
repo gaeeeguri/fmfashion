@@ -6,6 +6,7 @@ import { createTokenBucket } from '../lib/tokenBucket.js';
 import { createSearchSession } from '../lib/searchSession.js';
 import { createResultView } from '../lib/resultView.js';
 import { fetchPage } from '../lib/fetchPage.js';
+import { snapshotKey, saveSnapshot, loadSnapshot } from '../lib/resultSnapshot.js';
 import { mountPanel } from '../ui/panel.js';
 import { mountBadge } from '../ui/badge.js';
 import panelCss from '../ui/panel.css';
@@ -31,6 +32,8 @@ let hidingApplied = false;
 let mode = null;
 let syncSeq = 0;
 let ui = null; // { badge, panel }
+let saveNow = null; // writes the current run's snapshot (flushed on pagehide)
+let saveTimer = 0;
 
 function clearHash() {
   history.replaceState(null, '', location.pathname + location.search);
@@ -46,7 +49,7 @@ function setSelection(brandIds, categoryKey) {
 function go(sel) {
   const h = encodeFmfHash(sel);
   if (!page.listRoot) location.href = FASHION + h;
-  else if (location.hash === h) syncMode();
+  else if (location.hash === h) syncMode({ fresh: true }); // 보기 again = search again
   else location.hash = h;
 }
 
@@ -58,8 +61,11 @@ async function applyPlainHiding(dict) {
   hidingApplied = hiddenBrandIds.length > 0;
 }
 
-async function syncMode() {
+async function syncMode({ fresh = false } = {}) {
   const my = ++syncSeq;
+  saveNow?.(); // keep what the old run loaded before it goes away
+  saveNow = null;
+  clearTimeout(saveTimer);
   mode?.session?.cancel(); // stop the old run right away, before any await
   mode?.view.pause(); // and no sentinel-triggered load on it while we wait
   const sel = parseFmfHash(location.hash);
@@ -98,6 +104,12 @@ async function syncMode() {
   }
   const view = mode.view;
   const linkHash = location.hash;
+  // Posts opened from the results carry the same hash: show the list we already have (spec §11.3)
+  const key = snapshotKey({ hash: linkHash, hiddenBrandIds, dictVersion: dict.version });
+  const save = () => {
+    const snap = session.snapshot();
+    if (snap?.rows.length) saveSnapshot(localStorage, key, snap);
+  };
   const session = createSearchSession({
     dict, matchers, fetchPage, take,
     onChange: (state) => {
@@ -106,10 +118,16 @@ async function syncMode() {
         brands, categoryName: session.category?.name ?? '', totalTerms: state.totalTerms,
         linkHash, hiddenCount: hiddenBrandIds.length,
       });
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(save, 400);
     },
   });
   mode.session = session;
-  session.start({ brandIds: brands.map((b) => b.id), categoryKey: sel.categoryKey, hiddenBrandIds });
+  saveNow = save;
+  const snap = fresh ? null : loadSnapshot(localStorage, key);
+  if (!snap || !session.restore(snap)) {
+    session.start({ brandIds: brands.map((b) => b.id), categoryKey: sel.categoryKey, hiddenBrandIds });
+  }
 }
 
 async function mountUi() {
@@ -150,7 +168,8 @@ async function refreshUi(changes, area) {
 if (page) {
   mountUi();
   syncMode();
-  window.addEventListener('hashchange', syncMode);
+  window.addEventListener('hashchange', () => syncMode());
+  window.addEventListener('pagehide', () => saveNow?.());
   chrome.storage.onChanged.addListener((changes, area) => {
     refreshUi(changes, area);
     if (needsResync(changes, area)) syncMode();

@@ -233,3 +233,46 @@ ftest('list job rows are kept even without a category link', async () => {
   await s.start(sel([], 'fit', ['fafter']));
   expect(s.state.rows.length).toBeGreaterThan(0);
 });
+
+ftest('snapshot → restore keeps rows and continues paging without refetching', async () => {
+  const f = fakeFetch();
+  const a = make(f);
+  await a.start(sel(['anotheroffice']));
+  const snap = JSON.parse(JSON.stringify(a.snapshot()));
+
+  const g = fakeFetch();
+  const b = make(g);
+  expect(b.restore(snap)).toBe(true);
+  expect(g.calls.length).toBe(0);
+  expect(b.state.status).toBe('done');
+  expect(b.state.rows.map((r) => r.docId)).toEqual(a.state.rows.map((r) => r.docId));
+  expect(b.state.rows.map((r) => r.hits)).toEqual(a.state.rows.map((r) => r.hits));
+  expect(b.state.rows.every((r) => r.tr?.tagName === 'TR')).toBe(true);
+  expect(b.state.moreLabel).toBe('더 보기');
+  await b.more();
+  expect(g.calls.map((p) => p.get('page'))).toEqual(['2', '2']);
+  expect(b.state.finished).toBe(true);
+});
+ftest('restore rejects a snapshot from different jobs', async () => {
+  const a = make(fakeFetch());
+  await a.start(sel(['anotheroffice']));
+  const snap = a.snapshot();
+  const b = make(fakeFetch());
+  expect(b.restore({ ...snap, fetched: [1] })).toBe(false);
+  expect(b.restore(null)).toBe(false);
+});
+ftest('snapshot taken mid-run resumes the unfetched jobs', async () => {
+  let s;
+  let snap = null;
+  const f = fakeFetch(async () => {
+    if (!snap && s.state.rows.length) snap = JSON.parse(JSON.stringify(s.snapshot()));
+  });
+  s = make(f);
+  await s.start(sel(['anotheroffice']));
+  const g = fakeFetch();
+  const b = make(g);
+  expect(b.restore(snap)).toBe(true);
+  expect(b.state.rows.length).toBeGreaterThan(0);
+  await b.more();
+  expect(g.calls.map((p) => p.get('page')).sort()).toEqual(['1', '2']);
+});

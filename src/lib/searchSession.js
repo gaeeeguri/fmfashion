@@ -21,12 +21,12 @@ const NOTICE_ORDER = ['limited', 'unrecognized', 'error'];
 
 /**
  * One brand-search session for a page (spec §5). Only the latest run may touch state; starting a
- * new run aborts the previous one. Nothing is cached.
+ * new run aborts the previous one. snapshot()/restore() carry the loaded list across page views (spec §11.3).
  * @param {{ dict: import('./dictionary.js').Dictionary, matchers: import('./matcher.js').Matchers,
  *   fetchPage: Function, take: (signal?: AbortSignal) => Promise<void>, sleep?: Function,
  *   onChange?: (s: SessionState) => void }} deps
  */
-export function createSearchSession({ dict, matchers, fetchPage, take, sleep, onChange = () => {} }) {
+export function createSearchSession({ dict, matchers, fetchPage, take, sleep, onChange = () => {}, doc = globalThis.document }) {
   /** @type {SessionState} */
   const state = {
     status: 'idle', mode: null, rows: [], progress: null, totalTerms: 0, jobCount: 0, notice: null, moreLabel: null, finished: false, autoLoad: true,
@@ -60,6 +60,24 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
     const open = jobs.map((_, i) => i).filter((i) => fetched[i] < last[i]);
     state.finished = unfinished.length === 0 && open.length === 0;
     state.moreLabel = unfinished.length ? '이어서 검색' : open.length ? '더 보기' : null;
+  }
+
+  function setup(s) {
+    sel = s;
+    category = dict.categories.find((c) => c.key === s.categoryKey) ?? dict.categories.find((c) => c.key === 'all');
+    const browse = s.brandIds.length === 0 && s.hiddenBrandIds.length > 0;
+    const built = browse
+      ? { jobs: buildListJobs({ dict, categoryKey: s.categoryKey }), totalTerms: 0 }
+      : buildSearchJobs({ dict, selectedBrandIds: s.brandIds, hiddenBrandIds: s.hiddenBrandIds });
+    jobs = built.jobs;
+    state.mode = browse ? 'browse' : s.brandIds.length ? 'search' : null;
+    return built;
+  }
+
+  function parseTr(html) {
+    const body = doc.createElement('tbody');
+    body.innerHTML = html;
+    return body.querySelector('tr');
   }
 
   async function run(indices, my) {
@@ -122,16 +140,9 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
     /** @param {{ brandIds: string[], categoryKey: string, hiddenBrandIds: string[] }} s */
     async start(s) {
       const my = ++token;
-      sel = s;
-      category = dict.categories.find((c) => c.key === s.categoryKey) ?? dict.categories.find((c) => c.key === 'all');
+      const built = setup(s); // synchronously: callers read category right away; the old run is token-guarded
       await stopCurrent();
       if (my !== token) return;
-      const browse = s.brandIds.length === 0 && s.hiddenBrandIds.length > 0;
-      const built = browse
-        ? { jobs: buildListJobs({ dict, categoryKey: s.categoryKey }), totalTerms: 0 }
-        : buildSearchJobs({ dict, selectedBrandIds: s.brandIds, hiddenBrandIds: s.hiddenBrandIds });
-      jobs = built.jobs;
-      state.mode = browse ? 'browse' : s.brandIds.length ? 'search' : null;
       fetched = jobs.map(() => 0);
       last = jobs.map(() => Infinity);
       unfinished = [];
@@ -153,6 +164,43 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
       const indices = unfinished.length ? unfinished : jobs.map((_, i) => i).filter((i) => fetched[i] < last[i]);
       unfinished = [];
       await run(indices, ++token);
+    },
+    /**
+     * Plain-JSON copy of what this run has loaded so far: rows (as row HTML) plus how far each job
+     * got. Pages still in flight count as not fetched, so a restored session asks for them again.
+     */
+    snapshot() {
+      if (!sel || !jobs.length) return null;
+      return {
+        sel,
+        fetched: [...fetched],
+        last: last.map((n) => (Number.isFinite(n) ? n : null)),
+        unfinished: [...unfinished],
+        emptyRounds,
+        autoLoad: state.autoLoad,
+        totalTerms: state.totalTerms,
+        rows: state.rows.map(({ tr, ...r }) => ({ ...r, html: tr.outerHTML })),
+      };
+    },
+    /** Show a snapshot's list without fetching; scrolling/더 보기 continues from where it stopped. */
+    restore(snap) {
+      if (!snap?.sel || !Array.isArray(snap.rows)) return false;
+      token++;
+      current?.ctl.abort();
+      setup(snap.sel);
+      if (snap.fetched?.length !== jobs.length || snap.last?.length !== jobs.length) return false;
+      fetched = [...snap.fetched];
+      last = snap.last.map((n) => n ?? Infinity);
+      unfinished = [...(snap.unfinished ?? [])];
+      emptyRounds = snap.emptyRounds ?? 0;
+      const rows = snap.rows.map(({ html, ...r }) => ({ ...r, tr: parseTr(html) })).filter((r) => r.tr);
+      Object.assign(state, {
+        status: 'done', rows, progress: null, notice: null, autoLoad: snap.autoLoad !== false,
+        totalTerms: snap.totalTerms ?? 0, jobCount: jobs.length,
+      });
+      labels();
+      emit();
+      return true;
     },
     cancel() {
       current?.ctl.abort();
