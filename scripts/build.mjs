@@ -18,6 +18,7 @@ await build({
   format: 'iife',
   target: 'chrome120',
   logLevel: 'warning',
+  loader: { '.css': 'text' }, // the in-page panel injects its stylesheet into a shadow root
 });
 
 function copyStatic(dir) {
