@@ -1,21 +1,23 @@
-:root {
+:root, :host {
   --bg: #fff; --fg: #1a1a1a; --muted: #888; --faint: #999; --line: #e3e3e6; --soft: #f1f1f3; --foot: #fafafb;
   --blue: #3b5bfd; --blue-bg: #eef1ff; --blue-fg: #2a45d8;
   --red: #e5484d; --red-bg: #fff0f0; --red-fg: #c8323a; --dim: #c4c4c4;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root, :host {
     --bg: #1c1c1f; --fg: #ececf0; --muted: #9a9aa3; --faint: #85858e; --line: #3a3a40; --soft: #2a2a2f; --foot: #222226;
     --blue-bg: #232a4d; --blue-fg: #aebcff; --red-bg: #3d2224; --red-fg: #ff9a9e; --dim: #5a5a60;
   }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 13px -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+body { margin: 0; background: var(--bg); }
+.pp { background: var(--bg); color: var(--fg); font: 13px -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; text-align: left; line-height: normal; }
 button { font: inherit; color: inherit; cursor: pointer; }
 .pp { width: 340px; }
 .pp-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px; }
 .pp-h b { font-size: 15px; }
-.pp-h span { font-size: 11px; color: var(--muted); }
+.pp-h span { font-size: 11px; color: var(--muted); margin-left: auto; }
+.pp-h .close { border: 0; background: none; color: var(--muted); font-size: 12px; margin-left: 10px; padding: 0; }
 .mode { display: flex; margin: 0 16px 12px; background: var(--soft); border-radius: 9px; padding: 3px; }
 .mode button { flex: 1; border: 0; background: none; padding: 7px; border-radius: 7px; color: var(--muted); }
 .mode button.on { background: var(--bg); color: var(--fg); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.1); }

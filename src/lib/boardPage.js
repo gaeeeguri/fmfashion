@@ -1,4 +1,4 @@
-import { parseListDocument, isBlockedHtml } from './parser.js';
+import { parseListDocument, isBlockedHtml, SELECTORS } from './parser.js';
 import { matchBrands } from './matcher.js';
 
 const BAR_ID = 'fmf-bar';
@@ -84,4 +84,26 @@ export function needsResync(changes, area) {
   const key = (v) => [...(v?.hiddenBrandIds ?? [])].sort().join(',');
   const { oldValue, newValue } = changes.settings;
   return !oldValue || key(oldValue) !== key(newValue);
+}
+
+/**
+ * Which fashion-board page this is (spec §11.3). Post URLs (`/<id>`, `document_srl=`) don't name the
+ * board, so post pages are recognised by the board header link.
+ * @param {string} url
+ * @param {Document} doc
+ * @returns {{ kind: 'list', listRoot: Element } | { kind: 'document', listRoot: Element | null } | null}
+ */
+export function classifyPage(url, doc) {
+  if (isBlockedHtml(doc.documentElement?.outerHTML ?? '')) return null;
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const wrap = doc.querySelector(SELECTORS.listWrap);
+  if (isFashionListUrl(url)) return wrap ? { kind: 'list', listRoot: wrap } : null;
+  const isPost = /^\/\d+\/?$/.test(u.pathname) || u.searchParams.has('document_srl');
+  if (isPost && doc.querySelector(SELECTORS.fashionBoardMarker)) return { kind: 'document', listRoot: wrap };
+  return null;
 }

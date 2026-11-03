@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { test, expect, beforeEach } from 'vitest';
-import { fixture, ftest, HAS_FIXTURES } from './fixtures.js';
+import { fixture, ftest, dtest, HAS_FIXTURES } from './fixtures.js';
 import bundled from '../../dictionary/brands.json';
 import { compileMatchers } from '../../src/lib/matcher.js';
-import { isFashionListUrl, applyHiding, isListPage, needsResync } from '../../src/lib/boardPage.js';
+import { isFashionListUrl, applyHiding, isListPage, needsResync, classifyPage } from '../../src/lib/boardPage.js';
 
 const B = 'https://www.fmkorea.com';
 const HTML = fixture('board-list.html');
@@ -85,4 +85,29 @@ test('needsResync only when hidden brands or the dictionary change', () => {
   expect(needsResync({ settings: { newValue: s(['a']) } }, 'sync')).toBe(true);
   expect(needsResync({ dictionary: { newValue: {} } }, 'local')).toBe(true);
   expect(needsResync({ other: {} }, 'sync')).toBe(false);
+});
+
+const docHtml = () => fixture('document.html');
+dtest('fashion post is a document with list root', () => {
+  const d = new DOMParser().parseFromString(docHtml(), 'text/html');
+  const page = classifyPage('https://www.fmkorea.com/10513685492', d);
+  expect(page.kind).toBe('document');
+  expect(page.listRoot.querySelector('table.bd_lst')).not.toBeNull();
+  expect(classifyPage('https://www.fmkorea.com/index.php?mid=fashion&document_srl=10513685492', d).kind).toBe('document');
+});
+dtest('other-board post is not a fashion document', () => {
+  const html = docHtml().replaceAll('href="/fashion"', 'href="/football"').replaceAll('value="fashion"', 'value="football"');
+  const d = new DOMParser().parseFromString(html, 'text/html');
+  expect(classifyPage('https://www.fmkorea.com/10513685492', d)).toBeNull();
+});
+ftest('list page classifies as list', () => {
+  const d = docOf('board-list.html');
+  const page = classifyPage('https://www.fmkorea.com/fashion', d);
+  expect(page.kind).toBe('list');
+  expect(page.listRoot.querySelector('table.bd_lst')).not.toBeNull();
+  expect(classifyPage('https://www.fmkorea.com/best', d)).toBeNull();
+});
+ftest('blocked page → null', () => {
+  expect(classifyPage('https://www.fmkorea.com/fashion', docOf('blocked-430.html'))).toBeNull();
+  expect(classifyPage('https://www.fmkorea.com/10513685492', docOf('blocked-430.html'))).toBeNull();
 });

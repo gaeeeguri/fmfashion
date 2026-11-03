@@ -1,7 +1,9 @@
+import { docIdFromHref } from './parser.js';
 // In-page result mode (spec §4.2): fmkorea's own list table shows the merged rows.
 const BAR_ID = 'fmf-results-bar';
-const MORE_ID = 'fmf-more';
-const END_ID = 'fmf-end';
+const FOOT_ID = 'fmf-foot';
+const SENTINEL_ID = 'fmf-sentinel';
+const ORIGIN = 'https://www.fmkorea.com';
 const HIDING_BAR_ID = 'fmf-bar';
 const ORIG = 'data-fmf-orig';
 const PREV = 'data-fmf-prev-display';
@@ -14,22 +16,28 @@ const NOTICE = {
   error: '일부 검색에 실패했어요',
   empty: '조건에 맞는 글이 없어요',
 };
+/** Default sentinel watcher: fires when the sentinel comes within 600px of the viewport. */
+function observeIntersection(el, onVisible) {
+  const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && onVisible(), { rootMargin: '600px 0px' });
+  io.observe(el);
+  return () => io.disconnect();
+}
 const BTN = 'border:0;background:none;color:#3b5bfd;cursor:pointer;padding:0;font:inherit';
 
 /**
  * @param {Document} doc
  * @param {{ onRemoveBrand: (id: string) => void, onCancel: () => void, onExit: () => void, onMore: () => void }} h
  */
-export function createResultView(doc, h) {
+export function createResultView(doc, h, { observe = observeIntersection, root = doc } = {}) {
   const el = (tag, props = {}, kids = []) => {
     const e = Object.assign(doc.createElement(tag), props);
     e.append(...kids);
     return e;
   };
 
-  let table = doc.querySelector('table.bd_lst');
+  let table = root.querySelector('table.bd_lst');
   let createdTable = null;
-  const pager = doc.querySelector('form.bd_pg');
+  const pager = root.querySelector('form.bd_pg');
 
   // hide the original list and the plain hiding bar
   if (table) {
@@ -45,7 +53,7 @@ export function createResultView(doc, h) {
 
   if (!table) {
     createdTable = el('table', { className: 'bd_lst bd_tb_lst bd_tb' }, [el('tbody')]);
-    const wrap = doc.querySelector('div.bd_lst_wrp') ?? doc.body;
+    const wrap = (root.matches?.('div.bd_lst_wrp') ? root : root.querySelector('div.bd_lst_wrp')) ?? doc.body;
     if (pager && wrap.contains(pager)) pager.before(createdTable);
     else wrap.append(createdTable);
     table = createdTable;
@@ -56,30 +64,85 @@ export function createResultView(doc, h) {
   bar.style.cssText = 'margin:8px 0;padding:8px 10px;border:1px solid #c9d3ff;background:#f3f5ff;border-radius:6px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:#333';
   table.before(bar);
 
-  const more = el('button', { id: MORE_ID, type: 'button', hidden: true, onclick: () => h.onMore() });
-  more.style.cssText = 'display:block;margin:10px auto;padding:6px 18px;border:1px solid #c9d3ff;border-radius:6px;background:#fff;color:#3b5bfd;cursor:pointer;font-size:13px';
-  const end = el('div', { id: END_ID, textContent: '끝', hidden: true });
-  end.style.cssText = 'text-align:center;margin:10px 0;color:#999;font-size:12px';
-  table.after(more, end);
+  const foot = el('div', { id: FOOT_ID });
+  foot.style.cssText = 'text-align:center;margin:10px 0;color:#999;font-size:12px';
+  const sentinel = el('div', { id: SENTINEL_ID });
+  sentinel.style.cssText = 'height:1px';
+  table.after(foot, sentinel);
+
+  let canLoad = false; // true only right after a render that leaves more pages to auto-load
+  let disconnect = null;
+  const onVisible = () => {
+    if (!canLoad) return;
+    canLoad = false; // one load per render
+    h.onMore();
+  };
+  const arm = () => {
+    disconnect?.();
+    disconnect = observe(sentinel, onVisible);
+  };
+
+  /** @type {Map<number, { tr: HTMLTableRowElement, linkHash: string, hitsKey: string }>} */
+  const rendered = new Map();
+  const nextResult = (tr) => {
+    let n = tr.nextElementSibling;
+    while (n && !n.hasAttribute(RESULT)) n = n.nextElementSibling;
+    return n;
+  };
+  function makeRow(r, linkHash) {
+    const tr = doc.importNode(r.tr, true);
+    tr.setAttribute(RESULT, '');
+    tr.removeAttribute(ORIG);
+    tr.style.display = '';
+    // links lose fmkorea's per-alias search params and carry our state instead (spec §11.3)
+    for (const a of tr.querySelector('td.title')?.querySelectorAll('a[href]') ?? []) {
+      const id = docIdFromHref(a.getAttribute('href'));
+      if (!id) continue;
+      a.setAttribute('href', `${ORIGIN}/${id}${linkHash}`);
+      a.removeAttribute('data-viewer'); // fmkorea's viewer URL still carries the alias search
+    }
+    return tr;
+  }
+  function setBadges(tr, terms) {
+    const cell = tr.querySelector('td.title');
+    if (!cell) return;
+    for (const b of cell.querySelectorAll('.fmf-hit')) b.remove();
+    for (const term of terms) {
+      const b = el('span', { className: 'fmf-hit', textContent: term });
+      b.style.cssText = 'font-size:11px;color:#888;border:1px solid #e3e3e6;border-radius:5px;padding:0 5px;margin-left:5px';
+      cell.append(b);
+    }
+  }
 
   /**
    * @param {import('./searchSession.js').SessionState} state
-   * @param {{ brands: Array<{ id: string, name: string }>, categoryName: string, totalTerms: number }} ctx
+   * @param {{ brands: Array<{ id: string, name: string }>, categoryName: string, totalTerms: number,
+   *   linkHash?: string, hiddenCount?: number }} ctx
    */
   function render(state, ctx) {
-    for (const tr of tbody.querySelectorAll(`tr[${RESULT}]`)) tr.remove();
-    for (const r of state.rows) {
-      const tr = doc.importNode(r.tr, true);
-      tr.setAttribute(RESULT, '');
-      tr.removeAttribute(ORIG);
-      tr.style.display = '';
-      const cell = tr.querySelector('td.title');
-      for (const term of [...new Set(r.hits.map((x) => x.term))]) {
-        const b = el('span', { className: 'fmf-hit', textContent: term });
-        b.style.cssText = 'font-size:11px;color:#888;border:1px solid #e3e3e6;border-radius:5px;padding:0 5px;margin-left:5px';
-        cell?.append(b);
+    // incremental: keep rendered rows, add new ones, drop vanished ones, fix order only where needed
+    const want = new Set(state.rows.map((r) => r.docId));
+    for (const [id, node] of rendered) {
+      if (!want.has(id)) {
+        node.tr.remove();
+        rendered.delete(id);
       }
-      tbody.append(tr);
+    }
+    let cursor = tbody.querySelector(`tr[${RESULT}]`);
+    for (const r of state.rows) {
+      let node = rendered.get(r.docId);
+      if (!node || node.linkHash !== (ctx.linkHash ?? '')) {
+        node?.tr.remove();
+        node = { tr: makeRow(r, ctx.linkHash ?? ''), linkHash: ctx.linkHash ?? '', hitsKey: '' };
+        rendered.set(r.docId, node);
+      }
+      const terms = [...new Set(r.hits.map((x) => x.term))];
+      if (node.hitsKey !== terms.join('\u0000')) {
+        setBadges(node.tr, terms);
+        node.hitsKey = terms.join('\u0000');
+      }
+      if (node.tr === cursor) cursor = nextResult(cursor);
+      else tbody.insertBefore(node.tr, cursor);
     }
 
     const parts = [el('b', { textContent: '브랜드 모아보기' })];
@@ -87,6 +150,7 @@ export function createResultView(doc, h) {
     const cat = el('span', { textContent: ctx.categoryName });
     cat.style.cssText = 'background:#1a1a1a;color:#fff;border-radius:999px;padding:1px 8px';
     parts.push(cat);
+    if (state.mode === 'browse') parts.push(el('span', { textContent: `숨김 ${ctx.hiddenCount ?? 0}개 제외` }));
     for (const b of ctx.brands) {
       const x = el('button', { type: 'button', textContent: '✕', title: `${b.name} 빼기`, onclick: () => h.onRemoveBrand(b.id) });
       x.style.cssText = BTN + ';margin-left:4px';
@@ -115,16 +179,32 @@ export function createResultView(doc, h) {
     parts.push(status);
     bar.replaceChildren(...parts);
 
-    more.textContent = state.moreLabel ?? '';
-    more.hidden = state.status === 'running' || !state.moreLabel;
-    end.hidden = !(state.finished && state.status !== 'running' && state.rows.length > 0);
+    const running = state.status === 'running';
+    if (running && state.rows.length) foot.replaceChildren('불러오는 중…');
+    else if (!running && state.moreLabel === '이어서 검색') {
+      const b = el('button', { type: 'button', textContent: '이어서 검색', onclick: () => h.onMore() });
+      b.style.cssText = 'padding:6px 18px;border:1px solid #c9d3ff;border-radius:6px;background:#fff;color:#3b5bfd;cursor:pointer;font-size:13px';
+      foot.replaceChildren(b);
+    } else if (!running && state.moreLabel === '더 보기' && state.autoLoad === false) {
+      // auto-load braked after rounds that showed nothing new: the user decides (spec §11.2)
+      const b = el('button', { type: 'button', textContent: '더 보기', onclick: () => h.onMore() });
+      b.style.cssText = 'padding:6px 18px;border:1px solid #c9d3ff;border-radius:6px;background:#fff;color:#3b5bfd;cursor:pointer;font-size:13px';
+      foot.replaceChildren(b);
+    } else if (!running && state.finished && state.rows.length) foot.replaceChildren('끝');
+    else foot.replaceChildren();
+
+    canLoad = !running && state.moreLabel === '더 보기' && state.autoLoad !== false;
+    if (canLoad) arm();
   }
 
   function destroy() {
     bar.remove();
-    more.remove();
-    end.remove();
+    disconnect?.();
+    canLoad = false;
+    foot.remove();
+    sentinel.remove();
     for (const tr of tbody.querySelectorAll(`tr[${RESULT}]`)) tr.remove();
+    rendered.clear();
     createdTable?.remove();
     for (const tr of doc.querySelectorAll(`tr[${ORIG}]`)) {
       tr.style.display = tr.getAttribute(PREV) ?? '';
@@ -134,5 +214,12 @@ export function createResultView(doc, h) {
     if (pager) pager.style.display = pagerPrev;
   }
 
-  return { render, destroy };
+  /** Stop sentinel loads until the next render (e.g. while the selection is changing). */
+  function pause() {
+    canLoad = false;
+    disconnect?.();
+    disconnect = null;
+  }
+
+  return { render, destroy, pause };
 }
