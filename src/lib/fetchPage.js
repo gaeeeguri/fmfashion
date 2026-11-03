@@ -1,7 +1,7 @@
 /**
  * The single gateway for every fmkorea request.
- * Direct fetch from the extension context with the user's cookies — verified on 2026-11-02 to pass
- * fmkorea's security check (see spec §5 step 0). Callers wrap it with createPoliteFetch.
+ * Same-origin fetch from the fmkorea content script with the user's cookies (spec §5.3).
+ * Pacing comes from the per-page token bucket (tokenBucket.js), applied by the runner.
  * @param {string} url
  * @param {AbortSignal} [signal]
  * @returns {Promise<{ status: number, html: string }>}

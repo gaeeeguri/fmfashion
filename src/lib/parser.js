@@ -88,3 +88,17 @@ export function hasListTable(html) {
 export function isBlockedHtml(html) {
   return html.includes(BLOCKED_MARKER);
 }
+
+/**
+ * Parse one fetched list/search page, keeping fmkorea's own `<tr>` elements for in-page rendering.
+ * @param {string} html
+ * @returns {{ kind: 'ok', items: Array<{ row: Row, tr: HTMLTableRowElement }>, lastPage: number }
+ *   | { kind: 'blocked' } | { kind: 'unrecognized' }}
+ */
+export function parseSearchPage(html) {
+  if (isBlockedHtml(html)) return { kind: 'blocked' };
+  if (!hasListTable(html)) return { kind: 'unrecognized' };
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const n = parseInt(doc.querySelector('form.bd_pg')?.getAttribute('data-last-page') ?? '', 10);
+  return { kind: 'ok', items: parseListDocument(doc), lastPage: Number.isFinite(n) && n >= 1 ? n : 1 };
+}

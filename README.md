@@ -35,9 +35,8 @@ npm run zip       # → fmfashion-<version>.zip (웹스토어 업로드용)
 
 ## 구조
 
-- `src/lib/` — 순수 로직 (사전 검증, 매처, 검색어 생성, 파서, 병합, 순차 실행기, 저장소)
-- `src/popup/` — 툴바 팝업 (보기/숨기기)
-- `src/results/` — 결과 페이지
-- `src/content/board.js` — 패션 게시판 목록 숨기기
+- `src/lib/` — 순수 로직 (사전 검증, 매처, 검색어 생성, 파서, 병합, 토큰 버킷, 병렬 실행기, 검색 세션, `#fmf` 상태, 결과 화면, 저장소)
+- `src/popup/` — 툴바 팝업 (보기/숨기기). `보기`는 펨코 탭을 `fmkorea.com/fashion#fmf=…`로 이동
+- `src/content/board.js` — 패션 게시판: `#fmf=`가 있으면 목록 자리에 합쳐진 결과 표시, 없으면 숨김 브랜드 숨기기
 - `src/background/sw.js` — 사전 갱신
 - 설계: `docs/superpowers/specs/`, 계획: `docs/superpowers/plans/`

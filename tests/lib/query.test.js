@@ -46,3 +46,11 @@ test('buildSearchUrl encodes', () => {
 test('buildSearchUrl with category', () => {
   expect(buildSearchUrl('a', 1, '18910473')).toMatch(/&category=18910473$/);
 });
+
+test('default cap is 30 aliases per click', () => {
+  const dict = structuredClone(bundled);
+  dict.brands.find((b) => b.id === 'anotheroffice').searchTerms = Array.from({ length: 35 }, (_, i) => `t${i}`);
+  const { jobs, totalTerms } = buildSearchJobs({ dict, selectedBrandIds: ['anotheroffice'], hiddenBrandIds: [] });
+  expect(jobs.length).toBe(30);
+  expect(totalTerms).toBe(35);
+});

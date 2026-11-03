@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect } from 'vitest';
 import { fixture, ftest } from './fixtures.js';
-import { parseListHtml, isBlockedHtml, hasListTable } from '../../src/lib/parser.js';
+import { parseListHtml, isBlockedHtml, hasListTable, parseSearchPage } from '../../src/lib/parser.js';
 
 const read = (f) => fixture(f);
 
@@ -50,4 +50,22 @@ ftest('zero-result search page still has the list table', () => {
 ftest('unrecognized page has no list table', () => {
   expect(hasListTable('<html><body><p>로그인이 필요합니다</p></body></html>')).toBe(false);
   expect(hasListTable(read('board-list.html'))).toBe(true);
+});
+
+ftest('parseSearchPage ok', () => {
+  const p = parseSearchPage(read('search-result.html'));
+  expect(p.kind).toBe('ok');
+  expect(p.items.length).toBe(20);
+  expect(p.lastPage).toBe(2);
+  expect(p.items[0].tr.tagName).toBe('TR');
+  expect(p.items[0].row.docId).toBeGreaterThan(0);
+});
+ftest('parseSearchPage empty', () => {
+  expect(parseSearchPage(read('search-empty.html'))).toEqual({ kind: 'ok', items: [], lastPage: 1 });
+});
+ftest('parseSearchPage blocked', () => {
+  expect(parseSearchPage(read('blocked-430.html'))).toEqual({ kind: 'blocked' });
+});
+ftest('parseSearchPage unrecognized', () => {
+  expect(parseSearchPage('<html><body>x</body></html>')).toEqual({ kind: 'unrecognized' });
 });

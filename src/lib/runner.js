@@ -1,8 +1,8 @@
 import { buildSearchUrl } from './query.js';
-import { parseListHtml, isBlockedHtml, hasListTable } from './parser.js';
+import { parseSearchPage } from './parser.js';
 
-export const MIN_DELAY_MS = 1000;
-export const JITTER_MS = 500;
+export const RETRY_DELAYS_MS = [1000, 2000, 4000];
+
 /** Sleep that resolves early when `signal` aborts. */
 export function abortableSleep(ms, signal) {
   return new Promise((resolve) => {
@@ -17,39 +17,77 @@ export function abortableSleep(ms, signal) {
   });
 }
 
+/** @typedef {import('./query.js').SearchJob & { page: number, index: number }} RunJob */
+/** @typedef {{ job: RunJob, reason: 'limited' | 'error' | 'unrecognized' }} JobFailure */
+
 /**
- * Runs search jobs strictly one at a time, with a polite delay between requests.
+ * Runs every job at once; each request (retries included) first takes a token from the shared bucket.
+ * 429 → that job alone retries after `retryDelays`; 430 / security page → the whole run is aborted.
  * @param {{
- *   jobs: import('./query.js').SearchJob[], page?: number, categoryId?: string,
+ *   jobs: RunJob[],
  *   fetchPage: (url: string, signal?: AbortSignal) => Promise<{ status: number, html: string }>,
- *   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>, random?: () => number, signal?: AbortSignal,
- *   onProgress?: (p: { done: number, total: number, term: string }) => void,
- *   onRows: (rows: import('./parser.js').Row[], job: import('./query.js').SearchJob) => void,
+ *   take: (signal?: AbortSignal) => Promise<void>,
+ *   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>, retryDelays?: number[], signal?: AbortSignal,
+ *   onResult: (job: RunJob, page: { items: Array<{ row: import('./parser.js').Row, tr: HTMLTableRowElement }>, lastPage: number }) => void,
+ *   onSettled?: (job: RunJob) => void,
  * }} opts
- * @returns {Promise<{ status: 'done' | 'blocked' | 'cancelled' | 'error', completed: number, reason?: 'unrecognized' }>}
+ * @returns {Promise<{ status: 'done' | 'blocked' | 'cancelled', failed: JobFailure[] }>}
  */
 export async function runSearch({
-  jobs, page = 1, categoryId, fetchPage, sleep = abortableSleep, random = Math.random, signal, onProgress, onRows,
+  jobs, fetchPage, take, sleep = abortableSleep, retryDelays = RETRY_DELAYS_MS, signal, onResult, onSettled,
 }) {
-  let completed = 0;
-  for (const [i, job] of jobs.entries()) {
-    if (signal?.aborted) return { status: 'cancelled', completed };
-    if (i > 0) {
-      await sleep(MIN_DELAY_MS + Math.floor(random() * JITTER_MS), signal);
-      if (signal?.aborted) return { status: 'cancelled', completed };
+  const ctl = new AbortController();
+  const onAbort = () => ctl.abort();
+  if (signal?.aborted) ctl.abort();
+  else signal?.addEventListener('abort', onAbort, { once: true });
+
+  let blocked = false;
+  /** @type {JobFailure[]} */
+  const failed = [];
+
+  async function one(job) {
+    const url = buildSearchUrl(job.keyword, job.page);
+    for (let attempt = 0; ; attempt++) {
+      if (ctl.signal.aborted) return;
+      let res;
+      try {
+        await take(ctl.signal);
+        res = await fetchPage(url, ctl.signal);
+      } catch {
+        if (!ctl.signal.aborted) failed.push({ job, reason: 'error' });
+        return;
+      }
+      if (ctl.signal.aborted) return;
+      if (res.status === 429) {
+        if (attempt >= retryDelays.length) {
+          failed.push({ job, reason: 'limited' });
+          return;
+        }
+        await sleep(retryDelays[attempt], ctl.signal);
+        continue;
+      }
+      const page = res.status === 430 ? { kind: 'blocked' } : parseSearchPage(res.html);
+      if (page.kind === 'blocked') {
+        blocked = true;
+        ctl.abort();
+        return;
+      }
+      if (res.status >= 400) failed.push({ job, reason: 'error' });
+      else if (page.kind === 'unrecognized') failed.push({ job, reason: 'unrecognized' });
+      else onResult(job, { items: page.items, lastPage: page.lastPage });
+      return;
     }
-    onProgress?.({ done: i, total: jobs.length, term: job.term });
-    let res;
-    try {
-      res = await fetchPage(buildSearchUrl(job.keyword, job.page ?? page, categoryId), signal);
-    } catch {
-      return { status: signal?.aborted ? 'cancelled' : 'error', completed };
-    }
-    if (res.status === 430 || isBlockedHtml(res.html)) return { status: 'blocked', completed };
-    if (res.status >= 400) return { status: 'error', completed };
-    if (!hasListTable(res.html)) return { status: 'error', completed, reason: 'unrecognized' };
-    onRows(parseListHtml(res.html), job);
-    completed++;
   }
-  return { status: 'done', completed };
+
+  await Promise.all(
+    jobs.map((job) =>
+      one(job).finally(() => {
+        if (!ctl.signal.aborted) onSettled?.(job);
+      }),
+    ),
+  );
+  signal?.removeEventListener('abort', onAbort);
+  if (blocked) return { status: 'blocked', failed };
+  if (signal?.aborted) return { status: 'cancelled', failed };
+  return { status: 'done', failed };
 }

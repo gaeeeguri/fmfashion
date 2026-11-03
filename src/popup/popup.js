@@ -1,5 +1,6 @@
 import { getDictionary, isRefreshDue } from '../lib/dictionaryStore.js';
 import { loadSettings, saveSettings, normalizeSettings } from '../lib/settings.js';
+import { encodeFmfHash, goTarget } from '../lib/fmfHash.js';
 
 const $ = (id) => document.getElementById(id);
 let dict;
@@ -124,9 +125,12 @@ async function main() {
     persist();
     renderView();
   };
-  $('go').onclick = () => {
-    const q = new URLSearchParams({ brands: settings.selectedBrandIds.join(','), cat: settings.categoryKey });
-    chrome.tabs.create({ url: chrome.runtime.getURL('results/results.html') + '?' + q });
+  $('go').onclick = async () => {
+    // Results show inside the fmkorea fashion board itself (spec §4.2).
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const { action, url } = goTarget(tab?.url, encodeFmfHash({ brandIds: settings.selectedBrandIds, categoryKey: settings.categoryKey }));
+    if (action === 'update' && tab?.id != null) await chrome.tabs.update(tab.id, { url });
+    else await chrome.tabs.create({ url });
     window.close();
   };
   $('clear-hidden').onclick = () => {

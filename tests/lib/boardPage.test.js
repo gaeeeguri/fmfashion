@@ -3,7 +3,7 @@ import { test, expect, beforeEach } from 'vitest';
 import { fixture, ftest, HAS_FIXTURES } from './fixtures.js';
 import bundled from '../../dictionary/brands.json';
 import { compileMatchers } from '../../src/lib/matcher.js';
-import { isFashionListUrl, applyHiding } from '../../src/lib/boardPage.js';
+import { isFashionListUrl, applyHiding, isListPage, needsResync } from '../../src/lib/boardPage.js';
 
 const B = 'https://www.fmkorea.com';
 const HTML = fixture('board-list.html');
@@ -65,4 +65,24 @@ ftest('toggle shows and rehides', () => {
   btn.click();
   expect(target.closest('tr').style.display).toBe('none');
   expect(btn.textContent).toBe('보기');
+});
+
+const docOf = (f) => new DOMParser().parseFromString(fixture(f), 'text/html');
+ftest('isListPage: list and zero-result pages yes, security page no', () => {
+  expect(isListPage(docOf('board-list.html'))).toBe(true);
+  expect(isListPage(docOf('search-empty.html'))).toBe(true);
+  expect(isListPage(docOf('blocked-430.html'))).toBe(false);
+});
+test('isListPage: unknown page no', () => {
+  expect(isListPage(new DOMParser().parseFromString('<html><body>점검 중</body></html>', 'text/html'))).toBe(false);
+});
+test('needsResync only when hidden brands or the dictionary change', () => {
+  const s = (hidden, selected = []) => ({ hiddenBrandIds: hidden, selectedBrandIds: selected, categoryKey: 'all' });
+  // popup chip / category clicks: hidden list unchanged → no re-search
+  expect(needsResync({ settings: { oldValue: s(['a']), newValue: s(['a'], ['x']) } }, 'sync')).toBe(false);
+  expect(needsResync({ settings: { oldValue: s(['a', 'b']), newValue: s(['b', 'a']) } }, 'sync')).toBe(false);
+  expect(needsResync({ settings: { oldValue: s(['a']), newValue: s(['a', 'b']) } }, 'sync')).toBe(true);
+  expect(needsResync({ settings: { newValue: s(['a']) } }, 'sync')).toBe(true);
+  expect(needsResync({ dictionary: { newValue: {} } }, 'local')).toBe(true);
+  expect(needsResync({ other: {} }, 'sync')).toBe(false);
 });
