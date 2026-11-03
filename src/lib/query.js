@@ -9,7 +9,7 @@ export const SEARCH_BASE = 'https://www.fmkorea.com/search.php';
  *   maxRequests?: number, maxKeywordLength?: number }} opts
  * @returns {{ jobs: SearchJob[], totalTerms: number }}
  */
-export function buildSearchJobs({ dict, selectedBrandIds, hiddenBrandIds, maxRequests = 12, maxKeywordLength = 100 }) {
+export function buildSearchJobs({ dict, selectedBrandIds, hiddenBrandIds, maxRequests = 30, maxKeywordLength = 100 }) {
   const byId = new Map(dict.brands.map((b) => [b.id, b]));
   const hidden = new Set(hiddenBrandIds);
   const selected = selectedBrandIds.filter((id) => byId.has(id) && !hidden.has(id));

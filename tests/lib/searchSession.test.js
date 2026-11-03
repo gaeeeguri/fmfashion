@@ -1,0 +1,179 @@
+// @vitest-environment jsdom
+import { expect } from 'vitest';
+import { fixture, ftest } from './fixtures.js';
+import bundled from '../../dictionary/brands.json';
+import { compileMatchers } from '../../src/lib/matcher.js';
+import { createSearchSession } from '../../src/lib/searchSession.js';
+
+const LIST = fixture('search-result.html');
+const matchers = compileMatchers(bundled);
+const terms = (id) => bundled.brands.find((b) => b.id === id).searchTerms;
+
+/** respond(params, signal) → response; default serves LIST */
+function fakeFetch(respond) {
+  const calls = [];
+  const signals = [];
+  const fetchPage = async (url, signal) => {
+    const p = new URL(url).searchParams;
+    calls.push(p);
+    signals.push(signal);
+    await new Promise((r) => setTimeout(r, 1));
+    return (respond && (await respond(p, signal))) ?? { status: 200, html: LIST };
+  };
+  return { fetchPage, calls, signals };
+}
+const make = (f, dict = bundled) =>
+  createSearchSession({
+    dict, matchers: compileMatchers(dict), fetchPage: f.fetchPage, take: async () => {}, sleep: async () => {},
+  });
+const sel = (brandIds, categoryKey = 'all', hiddenBrandIds = []) => ({ brandIds, categoryKey, hiddenBrandIds });
+
+ftest('start merges and dedups newest first', async () => {
+  const s = make(fakeFetch());
+  await s.start(sel(['steadyeverywhere', 'anotheroffice']));
+  const { state } = s;
+  expect(state.status).toBe('done');
+  expect(state.jobCount).toBe(terms('steadyeverywhere').length + terms('anotheroffice').length);
+  const ids = state.rows.map((r) => r.docId);
+  expect(ids).toEqual([...ids].sort((a, b) => b - a));
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(state.rows.every((r) => r.tr?.tagName === 'TR' && r.hits.length === state.jobCount)).toBe(true);
+  expect(state.progress).toBeNull();
+});
+ftest('category filter applies', async () => {
+  const s = make(fakeFetch());
+  await s.start(sel(['anotheroffice'], 'fit'));
+  const fit = bundled.categories.find((c) => c.key === 'fit').ids;
+  expect(s.state.rows.length).toBeGreaterThan(0);
+  expect(s.state.rows.every((r) => fit.includes(r.categoryId))).toBe(true);
+});
+ftest('rows matching hidden brands are dropped', async () => {
+  const html = LIST.replace('오늘 착샷', '파프터 오늘 착샷');
+  const s = make(fakeFetch(() => ({ status: 200, html })));
+  await s.start(sel(['anotheroffice'], 'all', ['fafter']));
+  expect(s.state.rows.length).toBeGreaterThan(0);
+  expect(s.state.rows.some((r) => r.docId === 10501045295)).toBe(false);
+});
+ftest('more() stops at data-last-page', async () => {
+  const f = fakeFetch();
+  const s = make(f);
+  await s.start(sel(['anotheroffice']));
+  expect(s.state.moreLabel).toBe('더 보기');
+  expect(s.state.finished).toBe(false);
+  const before = f.calls.length;
+  await s.more();
+  expect(f.calls.slice(before).map((p) => p.get('page'))).toEqual(['2', '2']);
+  expect(s.state.moreLabel).toBeNull();
+  expect(s.state.finished).toBe(true);
+  const n = f.calls.length;
+  await s.more();
+  expect(f.calls.length).toBe(n);
+});
+ftest('limited job → 이어서 검색, more() refetches only it', async () => {
+  const first = terms('anotheroffice')[0];
+  let limit = true;
+  const f = fakeFetch((p) => (limit && p.get('search_keyword') === first ? { status: 429, html: '' } : undefined));
+  const s = make(f);
+  await s.start(sel(['anotheroffice']));
+  expect(s.state.status).toBe('done');
+  expect(s.state.notice).toBe('limited');
+  expect(s.state.moreLabel).toBe('이어서 검색');
+  expect(s.state.rows.length).toBeGreaterThan(0);
+  limit = false;
+  const before = f.calls.length;
+  await s.more();
+  expect(f.calls.slice(before).map((p) => [p.get('search_keyword'), p.get('page')])).toEqual([[first, '1']]);
+  expect(s.state.notice).toBeNull();
+  expect(s.state.moreLabel).toBe('더 보기');
+});
+ftest('blocked keeps rows and offers 이어서 검색 for unfinished jobs', async () => {
+  const [a, b] = terms('anotheroffice');
+  const f = fakeFetch((p) =>
+    p.get('search_keyword') === b ? new Promise((r) => setTimeout(() => r({ status: 430, html: '' }), 10)) : undefined,
+  );
+  const s = make(f);
+  await s.start(sel(['anotheroffice']));
+  expect(s.state.status).toBe('blocked');
+  expect(s.state.rows.length).toBeGreaterThan(0);
+  expect(s.state.moreLabel).toBe('이어서 검색');
+  const before = f.calls.length;
+  await s.more();
+  expect(f.calls.slice(before).map((p) => p.get('search_keyword'))).toEqual([b]);
+  expect(a).toBeTruthy();
+});
+ftest('new start ignores late results of previous run', async () => {
+  const slow = (p, signal) =>
+    p.get('search_keyword') === terms('steadyeverywhere')[0]
+      ? new Promise((r, rej) => {
+          const t = setTimeout(() => r({ status: 200, html: LIST }), 20);
+          signal.addEventListener('abort', () => { clearTimeout(t); rej(new DOMException('Aborted', 'AbortError')); });
+        })
+      : undefined;
+  const f = fakeFetch(slow);
+  const s = make(f);
+  const first = s.start(sel(['steadyeverywhere']));
+  await new Promise((r) => setTimeout(r, 5)); // A's requests are in flight
+  await s.start(sel(['anotheroffice']));
+  await first;
+  await new Promise((r) => setTimeout(r, 40));
+  const brands = new Set(s.state.rows.flatMap((r) => r.hits.map((h) => h.brandId)));
+  expect([...brands]).toEqual(['anotheroffice']);
+  expect(f.signals[0].aborted).toBe(true);
+  expect(s.state.status).toBe('done');
+});
+ftest('cancel → cancelled with 이어서 검색', async () => {
+  const f = fakeFetch((p, signal) => new Promise((_, rej) => signal.addEventListener('abort', () => rej(new DOMException('Aborted', 'AbortError')))));
+  const s = make(f);
+  const p = s.start(sel(['anotheroffice']));
+  await new Promise((r) => setTimeout(r, 5));
+  s.cancel();
+  await p;
+  expect(s.state.status).toBe('cancelled');
+  expect(s.state.moreLabel).toBe('이어서 검색');
+});
+ftest('unrecognized page sets notice', async () => {
+  const s = make(fakeFetch(() => ({ status: 200, html: '<html><body>?</body></html>' })));
+  await s.start(sel(['anotheroffice']));
+  expect(s.state.notice).toBe('unrecognized');
+});
+ftest('progress counts settled jobs', async () => {
+  const seen = [];
+  const f = fakeFetch();
+  const s = createSearchSession({
+    dict: bundled, matchers, fetchPage: f.fetchPage, take: async () => {}, sleep: async () => {},
+    onChange: (st) => st.progress && seen.push(`${st.progress.done}/${st.progress.total}`),
+  });
+  await s.start(sel(['anotheroffice']));
+  expect(seen[0]).toBe('0/2');
+  expect(seen).toContain('2/2');
+});
+ftest('empty selection → status empty, no requests', async () => {
+  const f = fakeFetch();
+  const s = make(f);
+  await s.start(sel([]));
+  expect(s.state.status).toBe('empty');
+  expect(f.calls.length).toBe(0);
+});
+ftest('alias cap: totalTerms > jobCount', async () => {
+  const dict = structuredClone(bundled);
+  const b = dict.brands.find((x) => x.id === 'anotheroffice');
+  b.searchTerms = Array.from({ length: 35 }, (_, i) => `별명${i}`);
+  const s = make(fakeFetch(), dict);
+  await s.start(sel(['anotheroffice']));
+  expect(s.state.jobCount).toBe(30);
+  expect(s.state.totalTerms).toBe(35);
+});
+ftest('start superseded before its first request sends nothing', async () => {
+  const f = fakeFetch();
+  const s = make(f);
+  const first = s.start(sel(['steadyeverywhere']));
+  await s.start(sel(['anotheroffice']));
+  await first;
+  expect(f.calls.map((p) => p.get('search_keyword').split(' ')[0])).toEqual(terms('anotheroffice'));
+});
+ftest('category is set synchronously by start()', () => {
+  const s = make(fakeFetch());
+  const p = s.start(sel(['anotheroffice'], 'fit'));
+  expect(s.category.key).toBe('fit');
+  return p;
+});
