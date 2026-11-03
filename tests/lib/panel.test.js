@@ -78,3 +78,18 @@ test('update re-renders with new settings', () => {
   expect($('#go').disabled).toBe(false);
   expect($('#tab-hide').textContent).toBe('숨기기 · 1');
 });
+
+test('a late echo of an earlier save does not undo newer clicks', async () => {
+  const { panel, button, saved, $ } = setup();
+  button('어나더오피스').click();
+  button('스테디에브리웨어').click();
+  panel.update(saved[0]); // storage.onChanged for the first save arrives late
+  button('PAF').click();
+  expect(saved.at(-1).selectedBrandIds).toEqual(['anotheroffice', 'steadyeverywhere', 'paf']);
+  expect($('#go').textContent).toBe('3개 브랜드 · 전체 보기');
+});
+test('a change from elsewhere still updates the panel', () => {
+  const { panel, $ } = setup();
+  panel.update(S({ hiddenBrandIds: ['fafter', 'firstfloor'] }));
+  expect($('#tab-hide').textContent).toBe('숨기기 · 2');
+});

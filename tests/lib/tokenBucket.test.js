@@ -61,3 +61,20 @@ test('aborted take rejects and does not consume', async () => {
   await b.take();
   expect(sleeps).toEqual([]);
 });
+
+test('buckets sharing a store share tokens across page views', async () => {
+  const mem = new Map();
+  const store = { load: () => mem.get('b') ?? null, save: (v) => mem.set('b', v) };
+  const a = createTokenBucket({ now, sleep, store });
+  await drain(a, 10);
+  const b = createTokenBucket({ now, sleep, store }); // next page view
+  await drain(b, 5);
+  expect(sleeps).toEqual([]);
+  await b.take();
+  expect(sleeps).toEqual([500]);
+});
+test('a broken store falls back to a full bucket', async () => {
+  const store = { load: () => { throw new Error('denied'); }, save: () => { throw new Error('denied'); } };
+  await drain(createTokenBucket({ now, sleep, store }));
+  expect(sleeps).toEqual([]);
+});

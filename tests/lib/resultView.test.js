@@ -183,3 +183,45 @@ ftest('creates a table when the page has none', () => {
   v.destroy();
   expect(doc.querySelector('table.bd_lst')).toBeNull();
 });
+
+ftest('manual 더 보기 when auto-load is off', () => {
+  const v = view();
+  const a0 = obs.arms;
+  v.render(st({ autoLoad: false }), ctx);
+  expect(obs.arms).toBe(a0);
+  obs.fire();
+  expect(calls).toEqual([]);
+  const btn = doc.querySelector('#fmf-foot button');
+  expect(btn.textContent).toBe('더 보기');
+  btn.click();
+  expect(calls).toEqual([['more']]);
+});
+ftest('pause() stops sentinel loads until the next render', () => {
+  const v = view();
+  v.render(st(), ctx);
+  v.pause();
+  obs.fire();
+  expect(calls).toEqual([]);
+});
+ftest('re-render keeps existing row nodes and updates badges', () => {
+  const v = view();
+  const state = st();
+  v.render(state, ctx);
+  const first = doc.querySelector('tr[data-fmf-result]');
+  const more = { ...state, rows: state.rows.map((r, i) => (i === 0 ? { ...r, hits: [...r.hits, { brandId: 'x', term: 'SEW' }] } : r)) };
+  v.render(more, ctx);
+  const again = doc.querySelector('tr[data-fmf-result]');
+  expect(again).toBe(first);
+  expect([...again.querySelectorAll('.fmf-hit')].map((e) => e.textContent)).toEqual(['목동', '스에웨', 'SEW']);
+  v.render({ ...state, rows: state.rows.slice(1) }, ctx);
+  expect(first.isConnected).toBe(false);
+  expect(doc.querySelectorAll('tr[data-fmf-result]').length).toBe(2);
+});
+ftest('rows are re-ordered when a newer row arrives', () => {
+  const v = view();
+  const state = st();
+  v.render({ ...state, rows: state.rows.slice(1) }, ctx);
+  v.render(state, ctx);
+  const ids = [...doc.querySelectorAll('tr[data-fmf-result] td.title > a:not(.replyNum)')].map((a) => a.getAttribute('href'));
+  expect(ids).toEqual(state.rows.map((r) => `https://www.fmkorea.com/${r.docId}${ctx.linkHash}`));
+});

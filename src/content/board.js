@@ -17,7 +17,15 @@ const PANEL_OPEN_KEY = 'panelOpen';
 const FASHION = 'https://www.fmkorea.com/fashion';
 
 const page = classifyPage(location.href, document); // list | document | null (spec §11.3)
-const take = createTokenBucket().take; // one bucket per page (spec §5.4)
+// One request budget for every fmkorea page view and tab (spec §5.4): kept in the site's
+// localStorage so opening posts from the results doesn't hand out a fresh burst each time.
+const BUCKET_KEY = 'fmf-request-bucket';
+const take = createTokenBucket({
+  store: {
+    load: () => JSON.parse(localStorage.getItem(BUCKET_KEY) ?? 'null'),
+    save: (v) => localStorage.setItem(BUCKET_KEY, JSON.stringify(v)),
+  },
+}).take;
 let hidingApplied = false;
 /** @type {null | { view: ReturnType<typeof createResultView>, session: ReturnType<typeof createSearchSession> | null }} */
 let mode = null;
@@ -53,6 +61,7 @@ async function applyPlainHiding(dict) {
 async function syncMode() {
   const my = ++syncSeq;
   mode?.session?.cancel(); // stop the old run right away, before any await
+  mode?.view.pause(); // and no sentinel-triggered load on it while we wait
   const sel = parseFmfHash(location.hash);
   const dict = await getDict();
   if (!dict || my !== syncSeq) return;

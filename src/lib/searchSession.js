@@ -13,6 +13,7 @@ import { filterRows, mergeRows } from './merge.js';
  *   notice: null | 'limited' | 'unrecognized' | 'error',
  *   moreLabel: '더 보기' | '이어서 검색' | null,
  *   finished: boolean,
+ *   autoLoad: boolean, // false after 3 rounds in a row added no visible row (spec §11.2 brake)
  * }} SessionState
  */
 
@@ -28,7 +29,7 @@ const NOTICE_ORDER = ['limited', 'unrecognized', 'error'];
 export function createSearchSession({ dict, matchers, fetchPage, take, sleep, onChange = () => {} }) {
   /** @type {SessionState} */
   const state = {
-    status: 'idle', mode: null, rows: [], progress: null, totalTerms: 0, jobCount: 0, notice: null, moreLabel: null, finished: false,
+    status: 'idle', mode: null, rows: [], progress: null, totalTerms: 0, jobCount: 0, notice: null, moreLabel: null, finished: false, autoLoad: true,
   };
   let sel = null;
   let category = null;
@@ -37,6 +38,8 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
   let last = []; // known last page per job
   let unfinished = []; // job indices to retry at their next page ("이어서 검색")
   let token = 0;
+  let emptyRounds = 0;
+  const MAX_EMPTY_ROUNDS = 3;
   let current = null; // { ctl, done }
 
   const emit = () => onChange(state);
@@ -65,6 +68,7 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
     const ctl = new AbortController();
     const runJobs = indices.map((i) => ({ ...jobs[i], page: fetched[i] + 1, index: i }));
     const settled = new Set();
+    const rowsBefore = state.rows.length;
     Object.assign(state, { status: 'running', notice: null, moreLabel: null, progress: { done: 0, total: runJobs.length } });
     emit();
 
@@ -79,7 +83,9 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
         fetched[job.index] = job.page;
         last[job.index] = page.lastPage;
         const rows = page.items.map(({ row, tr }) => ({ ...row, tr }));
-        const kept = filterRows(rows, { category, hiddenBrandIds: sel.hiddenBrandIds, matchers });
+        // a category list page is that category by construction; only search rows need the id check
+        const cat = job.kind === 'list' && job.categoryId ? { ...category, ids: [] } : category;
+        const kept = filterRows(rows, { category: cat, hiddenBrandIds: sel.hiddenBrandIds, matchers });
         state.rows = mergeRows(state.rows, kept, job.brandId, job.term);
         emit();
       },
@@ -98,6 +104,10 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
     const failedIdx = new Set(res.failed.map((f) => f.job.index));
     unfinished = runJobs.map((j) => j.index).filter((i) => failedIdx.has(i) || fetched[i] < runJobs.find((j) => j.index === i).page);
     const reasons = new Set(res.failed.map((f) => f.reason));
+    if (res.status === 'done') {
+      emptyRounds = state.rows.length > rowsBefore ? 0 : emptyRounds + 1;
+      state.autoLoad = emptyRounds < MAX_EMPTY_ROUNDS;
+    }
     Object.assign(state, {
       status: res.status,
       progress: null,
@@ -125,7 +135,9 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
       fetched = jobs.map(() => 0);
       last = jobs.map(() => Infinity);
       unfinished = [];
+      emptyRounds = 0;
       Object.assign(state, {
+        autoLoad: true,
         rows: [], progress: null, notice: null, moreLabel: null, finished: false,
         totalTerms: built.totalTerms, jobCount: jobs.length,
       });

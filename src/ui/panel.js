@@ -65,6 +65,7 @@ export function mountPanel(root, { dict, settings: initial, save, onGo, onClose 
   let settings = normalizeSettings(initial, dictRef);
   let hideDraft = new Set(settings.hiddenBrandIds);
   let tab = 'view';
+  const pendingEchoes = []; // JSON of our own saves whose storage.onChanged echo hasn't come back yet
 
   if (onClose) {
     const close = el('button', { className: 'close', type: 'button', textContent: '접기', onclick: () => onClose() });
@@ -76,6 +77,8 @@ export function mountPanel(root, { dict, settings: initial, save, onGo, onClose 
 
   function persist() {
     settings = normalizeSettings(settings, dictRef);
+    pendingEchoes.push(JSON.stringify(settings));
+    if (pendingEchoes.length > 50) pendingEchoes.shift();
     return save(settings);
   }
 
@@ -191,8 +194,16 @@ export function mountPanel(root, { dict, settings: initial, save, onGo, onClose 
   return {
     /** Re-render after settings or the dictionary changed elsewhere (another tab, the popup). */
     update(next, nextDict = dictRef) {
+      const dictChanged = nextDict !== dictRef;
       dictRef = nextDict;
-      settings = normalizeSettings(next, dictRef);
+      const incoming = normalizeSettings(next, dictRef);
+      const echo = pendingEchoes.indexOf(JSON.stringify(incoming));
+      if (echo >= 0 && !dictChanged) {
+        // our own earlier save coming back late: newer local clicks win
+        pendingEchoes.splice(0, echo + 1);
+        return;
+      }
+      settings = incoming;
       if (tab === 'view') renderView();
       else renderHide();
     },
