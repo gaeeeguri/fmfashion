@@ -86,7 +86,7 @@ ftest('limited job → 이어서 검색, more() refetches only it', async () => 
   expect(s.state.notice).toBeNull();
   expect(s.state.moreLabel).toBe('더 보기');
 });
-ftest('blocked keeps rows and offers 이어서 검색 for unfinished jobs', async () => {
+ftest('blocked keeps rows but offers no resume (user must reload)', async () => {
   const [a, b] = terms('anotheroffice');
   const f = fakeFetch((p) =>
     p.get('search_keyword') === b ? new Promise((r) => setTimeout(() => r({ status: 430, html: '' }), 10)) : undefined,
@@ -95,11 +95,12 @@ ftest('blocked keeps rows and offers 이어서 검색 for unfinished jobs', asyn
   await s.start(sel(['anotheroffice']));
   expect(s.state.status).toBe('blocked');
   expect(s.state.rows.length).toBeGreaterThan(0);
-  expect(s.state.moreLabel).toBe('이어서 검색');
+  expect(s.state.moreLabel).toBeNull();
+  expect(s.state.finished).toBe(false);
   const before = f.calls.length;
   await s.more();
-  expect(f.calls.slice(before).map((p) => p.get('search_keyword'))).toEqual([b]);
-  expect(a).toBeTruthy();
+  expect(f.calls.length).toBe(before);
+  expect(a && b).toBeTruthy();
 });
 ftest('new start ignores late results of previous run', async () => {
   const slow = (p, signal) =>

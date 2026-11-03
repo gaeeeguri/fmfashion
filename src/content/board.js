@@ -1,4 +1,4 @@
-import { isFashionListUrl, applyHiding } from '../lib/boardPage.js';
+import { isFashionListUrl, applyHiding, isListPage, needsResync } from '../lib/boardPage.js';
 import { compileMatchers } from '../lib/matcher.js';
 import { loadSettings } from '../lib/settings.js';
 import { parseFmfHash, encodeFmfHash } from '../lib/fmfHash.js';
@@ -40,7 +40,7 @@ async function syncMode() {
   const dict = await getDict();
   if (!dict || my !== syncSeq) return;
 
-  if (!sel) {
+  if (!sel || !isListPage(document)) {
     if (mode) {
       mode.session.cancel();
       mode.view.destroy();
@@ -88,6 +88,6 @@ if (isFashionListUrl(location.href)) {
   syncMode();
   window.addEventListener('hashchange', syncMode);
   chrome.storage.onChanged.addListener((changes, area) => {
-    if ((area === 'sync' && changes.settings) || (area === 'local' && changes.dictionary)) syncMode();
+    if (needsResync(changes, area)) syncMode();
   });
 }

@@ -39,6 +39,9 @@ ftest('hides original rows and pagination, inserts bar before table', () => {
   createResultView(doc, handlers);
   expect(origRows().length).toBeGreaterThan(0);
   expect(origRows().every((tr) => tr.style.display === 'none')).toBe(true);
+  const all = [...doc.querySelector('table.bd_lst').tBodies[0].rows];
+  expect(all.some((tr) => !tr.querySelector('td.title'))).toBe(true); // folded notice / ad rows exist
+  expect(all.every((tr) => tr.style.display === 'none')).toBe(true);
   expect(doc.querySelector('form.bd_pg').style.display).toBe('none');
   expect(doc.querySelector('table.bd_lst').previousElementSibling.id).toBe('fmf-results-bar');
 });

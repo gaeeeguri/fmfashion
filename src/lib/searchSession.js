@@ -47,6 +47,12 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
   }
 
   function labels() {
+    if (state.status === 'blocked') {
+      // fmkorea's security check is up: more requests only make it worse. The user reloads instead.
+      state.finished = false;
+      state.moreLabel = null;
+      return;
+    }
     const open = jobs.map((_, i) => i).filter((i) => fetched[i] < last[i]);
     state.finished = unfinished.length === 0 && open.length === 0;
     state.moreLabel = unfinished.length ? '이어서 검색' : open.length ? '더 보기' : null;

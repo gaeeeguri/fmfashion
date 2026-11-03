@@ -33,8 +33,7 @@ export function createResultView(doc, h) {
 
   // hide the original list and the plain hiding bar
   if (table) {
-    for (const tr of table.querySelectorAll('tr')) {
-      if (!tr.querySelector('td.title')) continue;
+    for (const body of table.tBodies) for (const tr of body.rows) {
       tr.setAttribute(ORIG, '');
       tr.setAttribute(PREV, tr.style.display);
       tr.style.display = 'none';

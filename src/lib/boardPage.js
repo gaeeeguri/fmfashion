@@ -1,4 +1,4 @@
-import { parseListDocument } from './parser.js';
+import { parseListDocument, isBlockedHtml } from './parser.js';
 import { matchBrands } from './matcher.js';
 
 const BAR_ID = 'fmf-bar';
@@ -61,4 +61,27 @@ function insertBar(doc, count) {
   };
   bar.append(label, btn);
   table.before(bar);
+}
+
+/**
+ * Result mode may only take over a real board list page — never fmkorea's security check,
+ * an error page or maintenance page served at the same URL.
+ * @param {Document} doc
+ */
+export function isListPage(doc) {
+  return !!doc.querySelector('div.bd_lst_wrp') && !isBlockedHtml(doc.documentElement?.outerHTML ?? '');
+}
+
+/**
+ * The popup saves selection clicks under the same `settings` key as hidden brands. Only a change
+ * to the hidden brands (or a new dictionary) should re-search or re-hide.
+ * @param {Record<string, { oldValue?: any, newValue?: any }>} changes
+ * @param {string} area
+ */
+export function needsResync(changes, area) {
+  if (area === 'local') return !!changes.dictionary;
+  if (area !== 'sync' || !changes.settings) return false;
+  const key = (v) => [...(v?.hiddenBrandIds ?? [])].sort().join(',');
+  const { oldValue, newValue } = changes.settings;
+  return !oldValue || key(oldValue) !== key(newValue);
 }
