@@ -7,3 +7,7 @@ const DIR = 'tests/fixtures';
 export const HAS_FIXTURES = ['board-list', 'search-result', 'search-empty', 'blocked-430'].every((f) => existsSync(`${DIR}/${f}.html`));
 export const fixture = (name) => (HAS_FIXTURES ? readFileSync(`${DIR}/${name}`, 'utf8') : '');
 export const ftest = HAS_FIXTURES ? test : test.skip;
+
+// Optional: a fashion-board post page saved from Chrome (spec §11.3). Tests using it skip when absent.
+export const HAS_DOC = HAS_FIXTURES && existsSync(`${DIR}/document.html`);
+export const dtest = HAS_DOC ? test : test.skip;

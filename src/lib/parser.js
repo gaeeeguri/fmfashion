@@ -14,6 +14,10 @@ export const SELECTORS = {
   author: 'td.author',
   time: 'td.time',
   counts: 'td.m_no',
+  // board header link that marks a fashion-board page, list or post (from a saved post page, 2026-11-03)
+  fashionBoardMarker: 'div.bd_tl h1 a[href="/fashion"]',
+  // the list wrapper; on post pages it is the list under the article
+  listWrap: 'div.bd_lst_wrp',
 };
 export const BLOCKED_MARKER = '에펨코리아 보안 시스템';
 const ORIGIN = 'https://www.fmkorea.com';
