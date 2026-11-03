@@ -5,83 +5,121 @@ import { runSearch, abortableSleep } from '../../src/lib/runner.js';
 
 const LIST = fixture('search-result.html');
 const BLOCKED = fixture('blocked-430.html');
-const jobs = ['a', 'b', 'c', 'd'].map((t) => ({ term: t, brandId: 'x', keyword: t }));
+const jobs = ['a', 'b', 'c', 'd'].map((t, index) => ({ term: t, brandId: 'x', keyword: t, page: 1, index }));
 
-function fakeFetch(responses) {
+/** responders: keyword → array of responses (consumed in order; last one repeats) or a function */
+function fakeFetch(responders = {}) {
   const calls = [];
+  const signals = [];
   let inflight = 0;
-  let maxInflight = 0;
-  const fetchPage = async (url) => {
+  let max = 0;
+  const fetchPage = async (url, signal) => {
+    const k = new URL(url).searchParams.get('search_keyword');
+    calls.push(k);
+    signals.push(signal);
     inflight++;
-    maxInflight = Math.max(maxInflight, inflight);
-    calls.push(url);
-    await Promise.resolve();
-    inflight--;
-    return responses[calls.length - 1] ?? { status: 200, html: LIST };
+    max = Math.max(max, inflight);
+    try {
+      const r = responders[k];
+      if (typeof r === 'function') return await r(signal);
+      await new Promise((res) => setTimeout(res, 1));
+      if (Array.isArray(r)) return r.length > 1 ? r.shift() : r[0];
+      return { status: 200, html: LIST };
+    } finally {
+      inflight--;
+    }
   };
-  return { fetchPage, calls, max: () => maxInflight };
+  return { fetchPage, calls, signals, max: () => max };
 }
-const sleeps = [];
-const sleep = async (ms) => { sleeps.push(ms); };
+const hang = (signal) =>
+  new Promise((_, rej) => signal.addEventListener('abort', () => rej(new DOMException('Aborted', 'AbortError')), { once: true }));
 
-ftest('requests sequentially with delay', async () => {
-  sleeps.length = 0;
-  const f = fakeFetch([]);
-  const res = await runSearch({ jobs, fetchPage: f.fetchPage, sleep, random: () => 0.999, onRows: () => {} });
-  expect(res).toEqual({ status: 'done', completed: 4 });
-  expect(f.calls.length).toBe(4);
-  expect(f.max()).toBe(1);
-  expect(sleeps.length).toBe(3);
-  expect(sleeps.every((ms) => ms >= 1000 && ms < 1500)).toBe(true);
+function harness() {
+  const h = { takes: 0, sleeps: [], results: [] };
+  h.take = async () => { h.takes++; };
+  h.sleep = async (ms) => { h.sleeps.push(ms); };
+  h.onResult = (job, page) => h.results.push([job.term, page.items.length, page.lastPage]);
+  return h;
+}
+
+ftest('runs all jobs in parallel', async () => {
+  const f = fakeFetch();
+  const h = harness();
+  const res = await runSearch({ jobs, fetchPage: f.fetchPage, take: h.take, sleep: h.sleep, onResult: h.onResult });
+  expect(res).toEqual({ status: 'done', failed: [] });
+  expect(f.max()).toBe(4);
+  expect(h.results.map((r) => r[2])).toEqual([2, 2, 2, 2]);
 });
-ftest('stops on blocked and keeps prior rows', async () => {
-  const f = fakeFetch([{ status: 200, html: LIST }, { status: 200, html: LIST }, { status: 430, html: '' }]);
-  const seen = [];
-  const res = await runSearch({ jobs, fetchPage: f.fetchPage, sleep, onRows: (rows, job) => seen.push([rows.length, job.term]) });
+ftest('takes a token per request', async () => {
+  const h = harness();
+  await runSearch({ jobs, fetchPage: fakeFetch().fetchPage, take: h.take, sleep: h.sleep, onResult: h.onResult });
+  expect(h.takes).toBe(4);
+});
+ftest('retries 429 with backoff then succeeds', async () => {
+  const f = fakeFetch({ a: [{ status: 429, html: '' }, { status: 429, html: '' }, { status: 200, html: LIST }] });
+  const h = harness();
+  const res = await runSearch({ jobs, fetchPage: f.fetchPage, take: h.take, sleep: h.sleep, onResult: h.onResult });
+  expect(res).toEqual({ status: 'done', failed: [] });
+  expect(h.sleeps).toEqual([1000, 2000]);
+  expect(h.takes).toBe(6);
+  expect(h.results.length).toBe(4);
+});
+ftest('gives up after 3 retries', async () => {
+  const f = fakeFetch({ a: [{ status: 429, html: '' }] });
+  const h = harness();
+  const res = await runSearch({ jobs, fetchPage: f.fetchPage, take: h.take, sleep: h.sleep, onResult: h.onResult });
+  expect(res).toEqual({ status: 'done', failed: [{ job: jobs[0], reason: 'limited' }] });
+  expect(h.sleeps).toEqual([1000, 2000, 4000]);
+  expect(f.calls.filter((k) => k === 'a').length).toBe(4);
+  expect(h.results.map((r) => r[0]).sort()).toEqual(['b', 'c', 'd']);
+});
+ftest('430 aborts the run', async () => {
+  const f = fakeFetch({ a: hang, c: hang, d: hang, b: [{ status: 430, html: '' }] });
+  const h = harness();
+  const res = await runSearch({ jobs, fetchPage: f.fetchPage, take: h.take, sleep: h.sleep, onResult: h.onResult });
   expect(res.status).toBe('blocked');
-  expect(f.calls.length).toBe(3);
-  expect(seen).toEqual([[20, 'a'], [20, 'b']]);
+  expect(f.signals.every((s) => s.aborted)).toBe(true);
+  expect(h.results).toEqual([]);
 });
-ftest('blocked html with status 200 also stops', async () => {
-  const f = fakeFetch([{ status: 200, html: BLOCKED }]);
-  const res = await runSearch({ jobs, fetchPage: f.fetchPage, sleep, onRows: () => {} });
-  expect(res).toEqual({ status: 'blocked', completed: 0 });
-  expect(f.calls.length).toBe(1);
+ftest('blocked marker html counts as blocked', async () => {
+  const f = fakeFetch({ a: [{ status: 200, html: BLOCKED }] });
+  const h = harness();
+  const res = await runSearch({ jobs, fetchPage: f.fetchPage, take: h.take, sleep: h.sleep, onResult: h.onResult });
+  expect(res.status).toBe('blocked');
 });
-ftest('cancel stops before next request', async () => {
-  const f = fakeFetch([]);
+ftest('unrecognized page fails only that job', async () => {
+  const f = fakeFetch({ c: [{ status: 200, html: '<html></html>' }] });
+  const h = harness();
+  const res = await runSearch({ jobs, fetchPage: f.fetchPage, take: h.take, sleep: h.sleep, onResult: h.onResult });
+  expect(res).toEqual({ status: 'done', failed: [{ job: jobs[2], reason: 'unrecognized' }] });
+  expect(h.results.length).toBe(3);
+});
+ftest('network error fails only that job', async () => {
+  const f = fakeFetch({ d: async () => { throw new TypeError('net'); } });
+  const h = harness();
+  const res = await runSearch({ jobs, fetchPage: f.fetchPage, take: h.take, sleep: h.sleep, onResult: h.onResult });
+  expect(res).toEqual({ status: 'done', failed: [{ job: jobs[3], reason: 'error' }] });
+});
+ftest('external abort → cancelled', async () => {
+  const f = fakeFetch({ a: hang, b: hang, c: hang, d: hang });
+  const h = harness();
   const ctl = new AbortController();
-  const res = await runSearch({ jobs, fetchPage: f.fetchPage, sleep, signal: ctl.signal, onRows: () => ctl.abort() });
-  expect(res.status).toBe('cancelled');
-  expect(f.calls.length).toBe(1);
+  const p = runSearch({ jobs, fetchPage: f.fetchPage, take: h.take, sleep: h.sleep, signal: ctl.signal, onResult: h.onResult });
+  setTimeout(() => ctl.abort(), 5);
+  expect((await p).status).toBe('cancelled');
 });
-ftest('fetch error returns error', async () => {
-  let n = 0;
-  const fetchPage = async () => { if (++n === 2) throw new Error('net'); return { status: 200, html: LIST }; };
-  const res = await runSearch({ jobs, fetchPage, sleep, onRows: () => {} });
-  expect(res).toEqual({ status: 'error', completed: 1 });
-});
-ftest('passes page and categoryId into url and reports progress', async () => {
-  const f = fakeFetch([]);
-  const progress = [];
-  await runSearch({ jobs: jobs.slice(0, 2), page: 2, categoryId: '18910473', fetchPage: f.fetchPage, sleep, onRows: () => {}, onProgress: (p) => progress.push(p) });
-  expect(f.calls[0]).toContain('page=2');
-  expect(f.calls[0]).toContain('category=18910473');
-  expect(progress).toEqual([{ done: 0, total: 2, term: 'a' }, { done: 1, total: 2, term: 'b' }]);
-});
-
-ftest('unrecognized page (no list table) returns error', async () => {
-  const f = fakeFetch([{ status: 200, html: '<html><body>로그인이 필요합니다</body></html>' }]);
-  const seen = [];
-  const res = await runSearch({ jobs, fetchPage: f.fetchPage, sleep, onRows: (r) => seen.push(r) });
-  expect(res).toEqual({ status: 'error', completed: 0, reason: 'unrecognized' });
-  expect(seen).toEqual([]);
-});
-ftest('job-level page overrides run page', async () => {
-  const f = fakeFetch([]);
-  await runSearch({ jobs: [{ ...jobs[0], page: 3 }, jobs[1]], page: 1, fetchPage: f.fetchPage, sleep, onRows: () => {} });
-  expect(f.calls[0]).toContain('page=3');
-  expect(f.calls[1]).toContain('page=1');
+ftest('uses job page in url and reports each settled job', async () => {
+  const urls = [];
+  const settled = [];
+  const fetchPage = async (url) => { urls.push(url); return { status: 200, html: LIST }; };
+  const h = harness();
+  await runSearch({
+    jobs: [{ ...jobs[0], page: 3 }], fetchPage, take: h.take, sleep: h.sleep, onResult: h.onResult,
+    onSettled: (job) => settled.push(job.term),
+  });
+  expect(urls[0]).toContain('page=3');
+  expect(urls[0]).not.toContain('category=');
+  expect(settled).toEqual(['a']);
 });
 ftest('abortableSleep resolves early on abort', async () => {
   const ctl = new AbortController();
