@@ -24,7 +24,7 @@ const num = (s) => {
   return Number.isNaN(n) ? null : n;
 };
 
-function docIdFromHref(href) {
+export function docIdFromHref(href) {
   if (!href) return null;
   const m = href.match(/document_srl=(\d+)/) ?? href.match(/^(?:https?:\/\/[^/]+)?\/(\d+)(?:[?#]|$)/);
   return m ? Number(m[1]) : null;
