@@ -1,4 +1,4 @@
-import { buildSearchUrl } from './query.js';
+import { jobUrl } from './query.js';
 import { parseSearchPage } from './parser.js';
 
 export const RETRY_DELAYS_MS = [1000, 2000, 4000];
@@ -46,7 +46,7 @@ export async function runSearch({
   const failed = [];
 
   async function one(job) {
-    const url = buildSearchUrl(job.keyword, job.page);
+    const url = jobUrl(job, job.page);
     for (let attempt = 0; ; attempt++) {
       if (ctl.signal.aborted) return;
       let res;

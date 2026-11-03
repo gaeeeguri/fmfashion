@@ -1,4 +1,4 @@
-import { buildSearchJobs } from './query.js';
+import { buildSearchJobs, buildListJobs } from './query.js';
 import { runSearch } from './runner.js';
 import { filterRows, mergeRows } from './merge.js';
 
@@ -6,6 +6,7 @@ import { filterRows, mergeRows } from './merge.js';
  * @typedef {import('./merge.js').ResultRow & { tr: HTMLTableRowElement }} SessionRow
  * @typedef {{
  *   status: 'idle' | 'empty' | 'running' | 'done' | 'blocked' | 'cancelled',
+ *   mode: 'search' | 'browse' | null,
  *   rows: SessionRow[],
  *   progress: { done: number, total: number } | null,
  *   totalTerms: number, jobCount: number,
@@ -27,7 +28,7 @@ const NOTICE_ORDER = ['limited', 'unrecognized', 'error'];
 export function createSearchSession({ dict, matchers, fetchPage, take, sleep, onChange = () => {} }) {
   /** @type {SessionState} */
   const state = {
-    status: 'idle', rows: [], progress: null, totalTerms: 0, jobCount: 0, notice: null, moreLabel: null, finished: false,
+    status: 'idle', mode: null, rows: [], progress: null, totalTerms: 0, jobCount: 0, notice: null, moreLabel: null, finished: false,
   };
   let sel = null;
   let category = null;
@@ -115,8 +116,12 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
       category = dict.categories.find((c) => c.key === s.categoryKey) ?? dict.categories.find((c) => c.key === 'all');
       await stopCurrent();
       if (my !== token) return;
-      const built = buildSearchJobs({ dict, selectedBrandIds: s.brandIds, hiddenBrandIds: s.hiddenBrandIds });
+      const browse = s.brandIds.length === 0 && s.hiddenBrandIds.length > 0;
+      const built = browse
+        ? { jobs: buildListJobs({ dict, categoryKey: s.categoryKey }), totalTerms: 0 }
+        : buildSearchJobs({ dict, selectedBrandIds: s.brandIds, hiddenBrandIds: s.hiddenBrandIds });
       jobs = built.jobs;
+      state.mode = browse ? 'browse' : s.brandIds.length ? 'search' : null;
       fetched = jobs.map(() => 0);
       last = jobs.map(() => Infinity);
       unfinished = [];

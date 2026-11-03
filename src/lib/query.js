@@ -1,7 +1,8 @@
 /** @typedef {import('./dictionary.js').Dictionary} Dictionary */
-/** @typedef {{ term: string, brandId: string, keyword: string }} SearchJob */
+/** @typedef {{ kind: 'search' | 'list', term: string, brandId: string | null, keyword: string, categoryId?: string | null }} SearchJob */
 
 export const SEARCH_BASE = 'https://www.fmkorea.com/search.php';
+export const LIST_BASE = 'https://www.fmkorea.com/index.php';
 
 /**
  * One search job per alias. Round-robin across brands so each brand's leading alias goes first.
@@ -32,6 +33,7 @@ export function buildSearchJobs({ dict, selectedBrandIds, hiddenBrandIds, maxReq
     for (const q of queues) if (i < q.length) ordered.push(q[i]);
 
   const jobs = ordered.slice(0, maxRequests).map(({ term, brandId }) => ({
+    kind: 'search',
     term,
     brandId,
     keyword: buildKeyword(term, byId.get(brandId).exclude ?? [], hiddenTerms, maxKeywordLength),
@@ -71,4 +73,28 @@ export function buildSearchUrl(keyword, page, categoryId) {
   const p = new URLSearchParams({ mid: 'fashion', search_target: 'title_content', search_keyword: keyword, page: String(page) });
   if (categoryId) p.set('category', categoryId);
   return `${SEARCH_BASE}?${p}`;
+}
+
+/**
+ * Browse mode (spec §11.1): one job per fmkorea tab in the category, or one for the whole board.
+ * @param {{ dict: Dictionary, categoryKey: string }} opts
+ * @returns {SearchJob[]}
+ */
+export function buildListJobs({ dict, categoryKey }) {
+  const cat = dict.categories.find((c) => c.key === categoryKey) ?? dict.categories.find((c) => c.key === 'all');
+  const ids = cat.ids.length ? cat.ids : [null];
+  return ids.map((categoryId) => ({ kind: 'list', categoryId, term: '', brandId: null, keyword: '' }));
+}
+
+/** @param {string | null} categoryId @param {number} page */
+export function buildListUrl(categoryId, page) {
+  const p = new URLSearchParams({ mid: 'fashion' });
+  if (categoryId) p.set('category', categoryId);
+  p.set('page', String(page));
+  return `${LIST_BASE}?${p}`;
+}
+
+/** @param {SearchJob} job @param {number} page */
+export function jobUrl(job, page) {
+  return job.kind === 'list' ? buildListUrl(job.categoryId ?? null, page) : buildSearchUrl(job.keyword, page);
 }

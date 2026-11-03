@@ -129,3 +129,11 @@ ftest('abortableSleep resolves early on abort', async () => {
   await p;
   expect(Date.now() - t0).toBeLessThan(1000);
 });
+
+ftest('list job fetches the list url', async () => {
+  const urls = [];
+  const fetchPage = async (url) => { urls.push(url); return { status: 200, html: LIST }; };
+  const h = harness();
+  await runSearch({ jobs: [{ kind: 'list', categoryId: '18910473', term: '', brandId: null, keyword: '', page: 1, index: 0 }], fetchPage, take: h.take, sleep: h.sleep, onResult: h.onResult });
+  expect(urls[0]).toBe('https://www.fmkorea.com/index.php?mid=fashion&category=18910473&page=1');
+});

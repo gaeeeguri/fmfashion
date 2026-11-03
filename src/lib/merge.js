@@ -30,7 +30,7 @@ export function mergeRows(existing, incoming, brandId, term) {
   for (const r of incoming) {
     const prev = map.get(r.docId);
     const hits = prev ? prev.hits : [];
-    const has = hits.some((h) => h.brandId === brandId && h.term === term);
+    const has = brandId === null || hits.some((h) => h.brandId === brandId && h.term === term);
     map.set(r.docId, { ...(prev ?? r), hits: has ? hits : [...hits, { brandId, term }] });
   }
   return [...map.values()].sort((a, b) => b.docId - a.docId);

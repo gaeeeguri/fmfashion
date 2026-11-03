@@ -45,3 +45,9 @@ test('does not mutate input', () => {
   expect(existing).toEqual(snapshot);
   expect(incoming).toEqual(incomingSnap);
 });
+
+test('mergeRows with null brand adds no hit', () => {
+  const out = mergeRows([], [row(5)], null, '');
+  expect(out.length).toBe(1);
+  expect(out[0].hits).toEqual([]);
+});

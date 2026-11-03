@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import bundled from '../../dictionary/brands.json';
-import { buildSearchJobs, buildSearchUrl } from '../../src/lib/query.js';
+import { buildSearchJobs, buildSearchUrl, buildListJobs, buildListUrl, jobUrl } from '../../src/lib/query.js';
 
 test('expands aliases with hidden exclusions', () => {
   const { jobs, totalTerms } = buildSearchJobs({ dict: bundled, selectedBrandIds: ['anotheroffice'], hiddenBrandIds: ['fafter'] });
@@ -53,4 +53,24 @@ test('default cap is 30 aliases per click', () => {
   const { jobs, totalTerms } = buildSearchJobs({ dict, selectedBrandIds: ['anotheroffice'], hiddenBrandIds: [] });
   expect(jobs.length).toBe(30);
   expect(totalTerms).toBe(35);
+});
+
+test('buildListJobs fit → one list job per category id', () => {
+  const fit = bundled.categories.find((c) => c.key === 'fit').ids;
+  const jobs = buildListJobs({ dict: bundled, categoryKey: 'fit' });
+  expect(jobs.map((j) => j.categoryId)).toEqual(fit);
+  expect(jobs.every((j) => j.kind === 'list' && j.brandId === null && j.term === '' && j.keyword === '')).toBe(true);
+});
+test('buildListJobs all → single job without category', () => {
+  expect(buildListJobs({ dict: bundled, categoryKey: 'all' })).toEqual([{ kind: 'list', categoryId: null, term: '', brandId: null, keyword: '' }]);
+});
+test('buildListUrl', () => {
+  expect(buildListUrl('18910473', 2)).toBe('https://www.fmkorea.com/index.php?mid=fashion&category=18910473&page=2');
+  expect(buildListUrl(null, 1)).toBe('https://www.fmkorea.com/index.php?mid=fashion&page=1');
+});
+test('jobUrl dispatches by kind', () => {
+  expect(jobUrl({ kind: 'list', categoryId: null }, 3)).toBe(buildListUrl(null, 3));
+  const { jobs } = buildSearchJobs({ dict: bundled, selectedBrandIds: ['anotheroffice'], hiddenBrandIds: [] });
+  expect(jobs[0].kind).toBe('search');
+  expect(jobUrl(jobs[0], 2)).toBe(buildSearchUrl(jobs[0].keyword, 2));
 });

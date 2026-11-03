@@ -6,6 +6,7 @@ import { compileMatchers } from '../../src/lib/matcher.js';
 import { createSearchSession } from '../../src/lib/searchSession.js';
 
 const LIST = fixture('search-result.html');
+const BOARD = fixture('board-list.html');
 const matchers = compileMatchers(bundled);
 const terms = (id) => bundled.brands.find((b) => b.id === id).searchTerms;
 
@@ -148,7 +149,7 @@ ftest('progress counts settled jobs', async () => {
   expect(seen[0]).toBe('0/2');
   expect(seen).toContain('2/2');
 });
-ftest('empty selection → status empty, no requests', async () => {
+ftest('no brands and no hidden → empty, no requests', async () => {
   const f = fakeFetch();
   const s = make(f);
   await s.start(sel([]));
@@ -177,4 +178,36 @@ ftest('category is set synchronously by start()', () => {
   const p = s.start(sel(['anotheroffice'], 'fit'));
   expect(s.category.key).toBe('fit');
   return p;
+});
+
+const boardFetch = (html = BOARD) => fakeFetch((p) => (p.has('search_keyword') ? undefined : { status: 200, html }));
+ftest('browse fit: one list job per id, merged', async () => {
+  const f = boardFetch();
+  const s = make(f);
+  await s.start(sel([], 'fit', ['fafter']));
+  const fit = bundled.categories.find((c) => c.key === 'fit').ids;
+  expect(s.state.mode).toBe('browse');
+  expect(s.state.jobCount).toBe(fit.length);
+  expect(f.calls.map((p) => p.get('category')).sort()).toEqual([...fit].sort());
+  expect(f.calls.every((p) => !p.has('search_keyword'))).toBe(true);
+  const ids = s.state.rows.map((r) => r.docId);
+  expect(ids.length).toBeGreaterThan(0);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(s.state.rows.every((r) => fit.includes(r.categoryId) && r.hits.length === 0)).toBe(true);
+  expect(s.state.moreLabel).toBe('더 보기');
+});
+ftest('browse drops hidden-brand titles', async () => {
+  const doc = new DOMParser().parseFromString(BOARD, 'text/html');
+  const a = [...doc.querySelectorAll('tr:not(.notice) td.title > a:not(.replyNum)')][3];
+  const id = Number(a.getAttribute('href').match(/\d+/)[0]);
+  a.textContent = '파프터 CS 또 터짐';
+  const s = make(boardFetch(doc.documentElement.outerHTML));
+  await s.start(sel([], 'all', ['fafter']));
+  expect(s.state.rows.length).toBeGreaterThan(0);
+  expect(s.state.rows.some((r) => r.docId === id)).toBe(false);
+});
+ftest('search mode is labelled', async () => {
+  const s = make(fakeFetch());
+  await s.start(sel(['anotheroffice']));
+  expect(s.state.mode).toBe('search');
 });
