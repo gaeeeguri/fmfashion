@@ -261,18 +261,59 @@ ftest('restore rejects a snapshot from different jobs', async () => {
   expect(b.restore({ ...snap, fetched: [1] })).toBe(false);
   expect(b.restore(null)).toBe(false);
 });
-ftest('snapshot taken mid-run resumes the unfetched jobs', async () => {
+ftest('rows appear only after every parallel request of the round has settled', async () => {
+  const seen = [];
+  let s;
+  const f = fakeFetch(async () => {
+    seen.push({ status: s.state.status, rows: s.state.rows.length });
+  });
+  s = createSearchSession({
+    dict: bundled, matchers, fetchPage: f.fetchPage, take: async () => {}, sleep: async () => {},
+    onChange: (st) => seen.push({ status: st.status, rows: st.rows.length }),
+  });
+  await s.start(sel(['steadyeverywhere']));
+  expect(seen.filter((x) => x.status === 'running').every((x) => x.rows === 0)).toBe(true);
+  expect(s.state.rows.length).toBeGreaterThan(0);
+  const first = s.state.rows.length;
+  seen.length = 0;
+  await s.more();
+  expect(seen.filter((x) => x.status === 'running').every((x) => x.rows === first)).toBe(true);
+});
+ftest('a round cancelled by the user still adds what it fetched', async () => {
+  let s;
+  const f = fakeFetch(async (p, signal) => {
+    if (p.get('search_keyword') === terms('steadyeverywhere')[0]) return undefined;
+    await new Promise((_, rej) => signal.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError'))));
+  });
+  s = make(f);
+  const p = s.start(sel(['steadyeverywhere']));
+  await new Promise((r) => setTimeout(r, 20));
+  s.cancel();
+  await p;
+  expect(s.state.status).toBe('cancelled');
+  expect(s.state.rows.length).toBeGreaterThan(0);
+});
+ftest('snapshot taken mid-run keeps the last complete round only', async () => {
   let s;
   let snap = null;
+  let round = 1;
+  let r2calls = 0;
   const f = fakeFetch(async () => {
-    if (!snap && s.state.rows.length) snap = JSON.parse(JSON.stringify(s.snapshot()));
+    // second request of round 2: the first one has already come back by now
+    if (round === 2 && ++r2calls === 2) {
+      await new Promise((r) => setTimeout(r, 5));
+      snap = JSON.parse(JSON.stringify(s.snapshot()));
+    }
   });
   s = make(f);
   await s.start(sel(['anotheroffice']));
+  const firstIds = s.state.rows.map((r) => r.docId);
+  round = 2;
+  await s.more();
   const g = fakeFetch();
   const b = make(g);
   expect(b.restore(snap)).toBe(true);
-  expect(b.state.rows.length).toBeGreaterThan(0);
+  expect(b.state.rows.map((r) => r.docId)).toEqual(firstIds);
   await b.more();
-  expect(g.calls.map((p) => p.get('page')).sort()).toEqual(['1', '2']);
+  expect(g.calls.map((p) => p.get('page'))).toEqual(['2', '2']);
 });

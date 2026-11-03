@@ -87,6 +87,10 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
     const runJobs = indices.map((i) => ({ ...jobs[i], page: fetched[i] + 1, index: i }));
     const settled = new Set();
     const rowsBefore = state.rows.length;
+    // Rows and page cursors of this round are held back and committed together when every request
+    // has settled, so the list grows once per round instead of jumping while requests come in.
+    let pendingRows = state.rows;
+    const pendingPages = new Map(); // job index → { page, lastPage }
     Object.assign(state, { status: 'running', notice: null, moreLabel: null, progress: { done: 0, total: runJobs.length } });
     emit();
 
@@ -98,14 +102,12 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
       signal: ctl.signal,
       onResult: (job, page) => {
         if (my !== token) return;
-        fetched[job.index] = job.page;
-        last[job.index] = page.lastPage;
+        pendingPages.set(job.index, { page: job.page, lastPage: page.lastPage });
         const rows = page.items.map(({ row, tr }) => ({ ...row, tr }));
         // a category list page is that category by construction; only search rows need the id check
         const cat = job.kind === 'list' && job.categoryId ? { ...category, ids: [] } : category;
         const kept = filterRows(rows, { category: cat, hiddenBrandIds: sel.hiddenBrandIds, matchers });
-        state.rows = mergeRows(state.rows, kept, job.brandId, job.term);
-        emit();
+        pendingRows = mergeRows(pendingRows, kept, job.brandId, job.term);
       },
       onSettled: (job) => {
         if (my !== token) return;
@@ -117,8 +119,13 @@ export function createSearchSession({ dict, matchers, fetchPage, take, sleep, on
     current = { ctl, done: done.catch(() => {}) };
     const res = await done;
     if (current?.ctl === ctl) current = null;
-    if (my !== token) return;
+    if (my !== token) return; // superseded: a newer run owns the state
 
+    state.rows = pendingRows;
+    for (const [i, p] of pendingPages) {
+      fetched[i] = p.page;
+      last[i] = p.lastPage;
+    }
     const failedIdx = new Set(res.failed.map((f) => f.job.index));
     unfinished = runJobs.map((j) => j.index).filter((i) => failedIdx.has(i) || fetched[i] < runJobs.find((j) => j.index === i).page);
     const reasons = new Set(res.failed.map((f) => f.reason));
