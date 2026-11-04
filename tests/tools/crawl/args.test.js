@@ -24,3 +24,10 @@ test('bad values are rejected', () => {
   expect(() => parseArgs(['--until', 'tomorrow'], NOW)).toThrow();
   expect(() => parseArgs(['--bogus'], NOW)).toThrow();
 });
+
+test('--interval sets seconds between requests', () => {
+  expect(parseArgs(['--interval', '45'], NOW).interval).toBe(45);
+  expect(parseArgs([], NOW).interval).toBe(null);
+  expect(() => parseArgs(['--interval', '0'], NOW)).toThrow();
+  expect(() => parseArgs(['--interval', 'slow'], NOW)).toThrow();
+});

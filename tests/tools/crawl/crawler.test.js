@@ -206,3 +206,9 @@ test('an interrupt (Ctrl-C) stops after in-flight work without any report', asyn
   expect(r.reason).toBe('interrupted');
   expect(t.checkpoints).toEqual([]);
 });
+
+test('opts.rates sets the pace: 0.1/s starts requests 10s apart', async () => {
+  const t = setup({ routes: { [listUrl(1)]: ok(listHtml([11, 12], 1)) }, opts: { rates: [0.1], maxInFlight: 1 } });
+  await t.run();
+  expect(t.at.slice(0, 3)).toEqual([0, 10000, 20000]);
+});

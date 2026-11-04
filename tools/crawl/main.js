@@ -86,7 +86,9 @@ const opts = {
   checkpoints: CHECKPOINTS,
   refillBelow: 200,
   unrecognizedStreakLimit: 20,
-  warmupMs: 300000, // first 5 min at 1/s
+  warmupMs: args.interval ? 0 : 300000, // first 5 min at 1/s
+  // --interval: slow mode, one request at a time (fmkorea blocked after ~101 requests at any rate, 2026-11-04)
+  ...(args.interval ? { rates: [1 / args.interval], maxInFlight: 1 } : {}),
   interrupted: false,
 };
 for (const sig of ['SIGINT', 'SIGTERM']) {
@@ -99,7 +101,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 
 const fmt = (t) => (t == null ? '없음' : new Date(t).toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' }));
 log('──────── fmfashion crawl ────────');
-log(`속도 초당 2건 (처음 5분은 1건) · 목표 ${opts.target}개 · 마감 ${fmt(opts.deadline)} · 이번 실행 종료 ${fmt(opts.runUntil)}`);
+log(`속도 ${args.interval ? `${args.interval}초에 1건` : '초당 2건 (처음 5분은 1건)'} · 목표 ${opts.target}개 · 마감 ${fmt(opts.deadline)} · 이번 실행 종료 ${fmt(opts.runUntil)}`);
 log(`데이터 ${CRAWL} · 카테고리 순서 ${opts.sources.map((s) => s.category ?? '전체').join(' → ')}`);
 log('밤사이 모니터 전원을 끄거나 케이블을 뽑지 마세요 (클램쉘 모드에서 맥이 잠듭니다).');
 

@@ -19,7 +19,7 @@ export function createRateGate({
   const startedAt = clock.now();
   // warm-up: 1 req/s at first, like the ramp that passed in the user's browser (spec §3)
   const rateAt = (t) => (t - startedAt < warmupMs ? Math.min(1, rates[rateIndex]) : rates[rateIndex]);
-  let rateIndex = initial?.rateIndex ?? 0;
+  let rateIndex = Math.min(initial?.rateIndex ?? 0, rates.length - 1);
   let recent429s = [...(initial?.recent429s ?? [])];
   let inFlight = 0;
   let nextAt = -Infinity; // earliest start time of the next request

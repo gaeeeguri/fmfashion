@@ -83,3 +83,8 @@ test('warm-up paces at 1/s before switching to the full rate', async () => {
   }
   expect(starts).toEqual([0, 1000, 2000, 3000, 3500, 4000]);
 });
+
+test('a saved rate step beyond the given rates clamps to the slowest one', () => {
+  const gate = createRateGate({ clock: fakeClock(), rates: [0.02], initial: { rateIndex: 2, recent429s: [] } });
+  expect(gate.rate).toBe(0.02);
+});
