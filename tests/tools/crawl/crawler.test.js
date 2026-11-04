@@ -43,6 +43,17 @@ function setup({ dir = mkdtempSync(join(tmpdir(), 'fmf-')), routes, opts = {}, d
   const s = site(routes, { clock, delay });
   const checkpoints = [];
   let waits = 0;
+  const merged = Object.assign(opts, {
+    sources: [{ category: null }],
+    excludeCategoryIds: EXCLUDE,
+    target: 100000,
+    deadline: null,
+    runUntil: null,
+    checkpoints: [],
+    refillBelow: 200,
+    unrecognizedStreakLimit: 20,
+    ...opts,
+  });
   const run = () =>
     runCrawl({
       fetchPage: s.fetchPage,
@@ -51,17 +62,7 @@ function setup({ dir = mkdtempSync(join(tmpdir(), 'fmf-')), routes, opts = {}, d
       },
       store: openStore(dir),
       clock,
-      opts: {
-        sources: [{ category: null }],
-        excludeCategoryIds: EXCLUDE,
-        target: 100000,
-        deadline: null,
-        runUntil: null,
-        checkpoints: [],
-        refillBelow: 200,
-        unrecognizedStreakLimit: 20,
-        ...opts,
-      },
+      opts: merged,
       onCheckpoint: (label, n) => checkpoints.push([label, n]),
       log: () => {},
     });
@@ -195,4 +196,13 @@ test('the pilot run (--for) ends with a pilot report, not a final one', async ()
   const t = setup({ routes: { [listUrl(1)]: ok(listHtml([11, 12, 13], 1)) }, opts: { runUntil: 600 } });
   await t.run();
   expect(t.checkpoints.map(([l]) => l)).toEqual(['pilot']);
+});
+
+test('an interrupt (Ctrl-C) stops after in-flight work without any report', async () => {
+  const opts = { interrupted: false };
+  const t = setup({ routes: { [listUrl(1)]: ok(listHtml([11, 12, 13, 14, 15, 16], 1)) }, opts, delay: 1000 });
+  setTimeout(() => (opts.interrupted = true), 0);
+  const r = await t.run();
+  expect(r.reason).toBe('interrupted');
+  expect(t.checkpoints).toEqual([]);
 });

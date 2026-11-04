@@ -12,11 +12,11 @@ const listUrl = (category, page) => `/index.php?mid=fashion${category ? `&catego
  *   clock: { now: () => number, sleep: (ms: number) => Promise<void> },
  *   opts: { sources: Array<{category: string|null}>, excludeCategoryIds: string[], target: number,
  *     deadline: number|null, runUntil: number|null, checkpoints: number[], refillBelow: number,
- *     unrecognizedStreakLimit: number, maxInFlight?: number },
+ *     unrecognizedStreakLimit: number, maxInFlight?: number, interrupted?: boolean },
  *   onCheckpoint: (label: number|string, postCount: number) => void,
  *   log?: (msg: string) => void,
  * }} deps
- * @returns {Promise<{ reason: 'target'|'deadline'|'for'|'blocked'|'unrecognized-streak'|'exhausted', postCount: number }>}
+ * @returns {Promise<{ reason: 'interrupted'|'target'|'deadline'|'for'|'blocked'|'unrecognized-streak'|'exhausted', postCount: number }>}
  */
 export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, onCheckpoint, log = () => {} }) {
   const prev = store.readState();
@@ -49,6 +49,7 @@ export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, 
   };
   const checkStop = () => {
     if (stop) return stop;
+    if (opts.interrupted) return (stop = 'interrupted');
     if (store.postCount() >= opts.target) return (stop = 'target');
     if (opts.deadline != null && clock.now() >= opts.deadline) return (stop = 'deadline');
     if (opts.runUntil != null && clock.now() >= opts.runUntil) return (stop = 'for');
@@ -214,7 +215,9 @@ export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, 
   state.stopReason = stop;
   save();
   const count = store.postCount();
-  if (stop === 'for') onCheckpoint('pilot', count);
+  if (stop === 'interrupted') {
+    // Ctrl-C / SIGTERM: state is saved, no report; rerun resumes
+  } else if (stop === 'for') onCheckpoint('pilot', count);
   else if (!(stop === 'target' && opts.checkpoints.includes(opts.target))) onCheckpoint('final', count);
   log(`stopped: ${stop} · ${count} posts`);
   return { reason: stop, postCount: count };
