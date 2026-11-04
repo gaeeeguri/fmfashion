@@ -12,6 +12,7 @@
   "devDependencies": {
     "esbuild": "^0.28.2",
     "jsdom": "^29.1.1",
+    "linkedom": "^0.18.12",
     "vitest": "^5.0.5"
   }
 }
