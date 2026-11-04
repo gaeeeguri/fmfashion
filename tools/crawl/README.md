@@ -9,7 +9,6 @@
 
 ```sh
 npm install
-npx playwright install chromium          # 수집 전용 Chromium
 python3 -m venv tools/lexicon/.venv
 tools/lexicon/.venv/bin/pip install -r tools/lexicon/requirements.txt
 ```
@@ -24,7 +23,11 @@ npm run crawl -- --until 2026-11-05T09:40:00+09:00            # 밤샘 (같은 �
 # 빠져나오기: Ctrl-b d   · 다시 보기: tmux attach -t fmf
 ```
 
-- 수집용 Chromium 창이 따로 뜬다. 그 창에서 펨코가 보안 페이지나 로그인 화면을 보이면 직접 해결한 뒤 다시 실행한다.
+- 수집기가 뜨면 **Arc**에서 `https://www.fmkorea.com/fashion` 탭을 열고 개발자 콘솔에 `tools/crawl/tab.js` 내용을 붙여 넣는다 (`pbcopy < tools/crawl/tab.js`). Arc가 로컬 네트워크 접근을 물으면 허용한다.
+  탭은 요청만 대신 보낸다 (사용자 세션, 같은 출처). 속도·저장·이어받기는 모두 터미널의 수집기가 한다.
+  탭을 새로고침했거나 닫았다면 다시 붙여 넣는다 — 수집기는 탭이 돌아올 때까지 기다린다.
+- 자동화 브라우저(Playwright Chromium, 새 프로필)는 102건 만에 430을 받았다 (2026-11-04). 우회하지 말고 사용자 세션 탭을 쓴다.
+- 처음 5분은 초당 1건으로 천천히 시작한다.
 - `run.sh`는 `caffeinate -dims`로 맥이 잠들지 않게 한다. 클램쉘 모드(뚜껑 닫고 외부 모니터 사용)에서는 **모니터 전원을 끄거나 케이블을 뽑지 말 것** — 맥이 바로 잠든다.
 - Ctrl-C 한 번: 처리 중인 요청을 끝내고 상태를 저장한 뒤 종료(보고서 없음). 두 번: 즉시 종료.
 

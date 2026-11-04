@@ -71,3 +71,15 @@ test('initial snapshot restores the rate step', () => {
   expect(gate.rate).toBe(1.5);
   expect(gate.snapshot()).toEqual({ rateIndex: 1, recent429s: [] });
 });
+
+test('warm-up paces at 1/s before switching to the full rate', async () => {
+  const clock = fakeClock();
+  const gate = createRateGate({ clock, warmupMs: 3000 });
+  const starts = [];
+  for (let i = 0; i < 6; i++) {
+    await gate.acquire();
+    starts.push(clock.now());
+    gate.release();
+  }
+  expect(starts).toEqual([0, 1000, 2000, 3000, 3500, 4000]);
+});

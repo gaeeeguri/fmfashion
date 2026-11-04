@@ -12,7 +12,7 @@ const listUrl = (category, page) => `/index.php?mid=fashion${category ? `&catego
  *   clock: { now: () => number, sleep: (ms: number) => Promise<void> },
  *   opts: { sources: Array<{category: string|null}>, excludeCategoryIds: string[], target: number,
  *     deadline: number|null, runUntil: number|null, checkpoints: number[], refillBelow: number,
- *     unrecognizedStreakLimit: number, maxInFlight?: number, interrupted?: boolean },
+ *     unrecognizedStreakLimit: number, maxInFlight?: number, warmupMs?: number, interrupted?: boolean },
  *   onCheckpoint: (label: number|string, postCount: number) => void,
  *   log?: (msg: string) => void,
  * }} deps
@@ -37,7 +37,7 @@ export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, 
     startedAt: prev?.startedAt ?? clock.now(),
     updatedAt: clock.now(),
   };
-  const gate = createRateGate({ clock, maxInFlight, initial: { rateIndex: state.rateIndex, recent429s: state.recent429s } });
+  const gate = createRateGate({ clock, maxInFlight, warmupMs: opts.warmupMs ?? 0, initial: { rateIndex: state.rateIndex, recent429s: state.recent429s } });
   const queued = new Set(state.queue.map((r) => r.docId));
   const taken = new Set(); // rows being fetched right now
   let pending = []; // bodiless rows waiting to see whether this is a streak (spec §4.2)

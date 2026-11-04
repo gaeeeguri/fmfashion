@@ -3,7 +3,7 @@
 
 /**
  * @param {{ rates?: number[], maxInFlight?: number, pauseMs?: number, windowMs?: number, threshold?: number,
- *   clock: { now: () => number, sleep: (ms: number) => Promise<void> },
+ *   warmupMs?: number, clock: { now: () => number, sleep: (ms: number) => Promise<void> },
  *   initial?: { rateIndex: number, recent429s: number[] } }} o
  */
 export function createRateGate({
@@ -12,9 +12,13 @@ export function createRateGate({
   pauseMs = 300000,
   windowMs = 3600000,
   threshold = 3,
+  warmupMs = 0,
   clock,
   initial,
 }) {
+  const startedAt = clock.now();
+  // warm-up: 1 req/s at first, like the ramp that passed in the user's browser (spec §3)
+  const rateAt = (t) => (t - startedAt < warmupMs ? Math.min(1, rates[rateIndex]) : rates[rateIndex]);
   let rateIndex = initial?.rateIndex ?? 0;
   let recent429s = [...(initial?.recent429s ?? [])];
   let inFlight = 0;
@@ -37,7 +41,7 @@ export function createRateGate({
         }
         // reserve the slot synchronously so concurrent callers queue behind each other
         const at = Math.max(t, nextAt);
-        nextAt = at + 1000 / rates[rateIndex];
+        nextAt = at + 1000 / rateAt(at);
         inFlight++;
         if (at > t) await clock.sleep(at - t);
         if (clock.now() < pausedUntil) {

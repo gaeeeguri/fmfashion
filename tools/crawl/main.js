@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from './args.js';
 import { openStore } from './store.js';
 import { runCrawl } from './crawler.js';
-import { openBrowser } from './browser.js';
+import { openBridge } from './bridge.js';
 import { parseList, classify } from './parse.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -62,7 +62,10 @@ function startReport(label, n) {
   });
 }
 
-const browser = await openBrowser({ profileDir: join(DATA, 'chrome-profile'), log });
+const browser = await openBridge({ log });
+log('Arc의 펨코 패션 게시판 탭 콘솔에 tools/crawl/tab.js 내용을 붙여 넣으세요 (복사: pbcopy < tools/crawl/tab.js).');
+log('Arc가 "로컬 네트워크 접근"을 물으면 허용하세요. 탭이 연결되면 시작합니다…');
+await browser.waitForNetwork();
 
 if (args.probeDepth) {
   const url = `/index.php?mid=fashion&page=${args.probeDepth}`;
@@ -83,6 +86,7 @@ const opts = {
   checkpoints: CHECKPOINTS,
   refillBelow: 200,
   unrecognizedStreakLimit: 20,
+  warmupMs: 300000, // first 5 min at 1/s
   interrupted: false,
 };
 for (const sig of ['SIGINT', 'SIGTERM']) {
@@ -95,7 +99,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 
 const fmt = (t) => (t == null ? '없음' : new Date(t).toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' }));
 log('──────── fmfashion crawl ────────');
-log(`속도 초당 2건 · 목표 ${opts.target}개 · 마감 ${fmt(opts.deadline)} · 이번 실행 종료 ${fmt(opts.runUntil)}`);
+log(`속도 초당 2건 (처음 5분은 1건) · 목표 ${opts.target}개 · 마감 ${fmt(opts.deadline)} · 이번 실행 종료 ${fmt(opts.runUntil)}`);
 log(`데이터 ${CRAWL} · 카테고리 순서 ${opts.sources.map((s) => s.category ?? '전체').join(' → ')}`);
 log('밤사이 모니터 전원을 끄거나 케이블을 뽑지 마세요 (클램쉘 모드에서 맥이 잠듭니다).');
 
