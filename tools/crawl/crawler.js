@@ -2,6 +2,8 @@
 import { parseList, parsePost, classify } from './parse.js';
 import { createRateGate } from './rateGate.js';
 
+const MAX_429_PER_URL = 3;
+
 const listUrl = (category, page) => `/index.php?mid=fashion${category ? `&category=${category}` : ''}&page=${page}`;
 
 /**
@@ -75,6 +77,7 @@ export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, 
 
   /** One request through the shared gate; network errors and 429s are retried here. */
   async function request(kind, url) {
+    let url429s = 0;
     for (;;) {
       if (checkStop()) return { cls: 'stopped' };
       await gate.acquire();
@@ -99,8 +102,12 @@ export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, 
       }
       if (cls === 'rate-limited') {
         const r = gate.on429();
-        log(`429 on ${url} — pausing until ${new Date(r.pausedUntil).toISOString()}${r.lowered ? `, rate lowered to ${r.rate}/s` : ''}`);
+        url429s++;
+        // the same URL answering 429 again and again (one post did, nine times, 2026-11-05) is about that URL, not our pace
+        const skip = url429s >= MAX_429_PER_URL;
+        log(`429 on ${url} — pausing until ${new Date(r.pausedUntil).toISOString()}${r.lowered ? `, rate lowered to ${r.rate}/s` : ''}${skip ? ` · ${url429s} in a row, skipping it` : ''}`);
         save();
+        if (skip) return { cls: 'http-error', res };
         continue;
       }
       return { cls, res };
