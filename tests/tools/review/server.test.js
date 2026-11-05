@@ -52,3 +52,13 @@ test('only answers on 127.0.0.1 and refuses other origins', async () => {
   const r = await fetch(`${srv.url}/api/save`, { method: 'POST', headers: { origin: 'https://evil.example' }, body: '{}' });
   expect(r.status).toBe(403);
 });
+
+test('refuses requests whose Host is not the loopback address (DNS rebinding)', async () => {
+  srv = await openReviewServer({ dir: fixture(), port: 0, run: async () => ({ code: 0, output: '' }) });
+  const { request } = await import('node:http');
+  const status = await new Promise((resolve) => {
+    const u = new URL(`${srv.url}/api/data`);
+    request({ host: u.hostname, port: u.port, path: u.pathname, headers: { host: `evil.example:${u.port}` } }, (res) => resolve(res.statusCode)).end();
+  });
+  expect(status).toBe(403);
+});

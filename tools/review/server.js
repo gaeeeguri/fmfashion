@@ -54,6 +54,9 @@ export function openReviewServer({ dir, port = 47824, run }) {
     });
 
   const server = createServer(async (req, res) => {
+    // DNS rebinding: a page on evil.example resolving to 127.0.0.1 still sends Host: evil.example
+    const port = server.address().port;
+    if (![`127.0.0.1:${port}`, `localhost:${port}`].includes(req.headers.host ?? '')) return send(res, 403, { error: 'host' });
     // a page on another site must not be able to rewrite the table through this port
     const origin = req.headers.origin;
     if (origin && origin !== `http://127.0.0.1:${server.address().port}`) return send(res, 403, { error: 'origin' });
