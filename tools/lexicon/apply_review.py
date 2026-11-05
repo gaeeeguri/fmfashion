@@ -33,8 +33,8 @@ def patterns_for(terms: list[str]) -> list[str]:
     out = []
     for t in terms:
         p = r"\s?".join(_escape(part) for part in t.split())
-        if re.search(r"[A-Za-z]", t):
-            p = f"(?<![A-Za-z]){p}(?![A-Za-z])"
+        if re.search(r"[0-9A-Za-z]", t):  # rrl must not hit carrlot, 808 must not hit 2808
+            p = f"(?<![0-9A-Za-z]){p}(?![0-9A-Za-z])"
         out.append(p)
     return out
 
