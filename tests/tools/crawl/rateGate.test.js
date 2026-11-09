@@ -69,7 +69,7 @@ test('429s more than an hour apart do not lower the rate', () => {
 test('initial snapshot restores the rate step', () => {
   const gate = createRateGate({ clock: fakeClock(), initial: { rateIndex: 1, recent429s: [] } });
   expect(gate.rate).toBe(1.5);
-  expect(gate.snapshot()).toEqual({ rateIndex: 1, recent429s: [] });
+  expect(gate.snapshot()).toEqual({ rateIndex: 1, recent429s: [], pausedUntil: null });
 });
 
 test('warm-up paces at 1/s before switching to the full rate', async () => {
@@ -87,4 +87,18 @@ test('warm-up paces at 1/s before switching to the full rate', async () => {
 test('a saved rate step beyond the given rates clamps to the slowest one', () => {
   const gate = createRateGate({ clock: fakeClock(), rates: [0.02], initial: { rateIndex: 2, recent429s: [] } });
   expect(gate.rate).toBe(0.02);
+});
+
+test('a saved 429 pause is honoured after a restart', async () => {
+  const clock = fakeClock();
+  const gate = createRateGate({ clock, initial: { rateIndex: 0, recent429s: [], pausedUntil: 300000 } });
+  await gate.acquire();
+  expect(clock.now()).toBeGreaterThanOrEqual(300000);
+});
+
+test('snapshot carries the pause so it can be saved', () => {
+  const clock = fakeClock();
+  const gate = createRateGate({ clock });
+  gate.on429();
+  expect(gate.snapshot().pausedUntil).toBe(300000);
 });

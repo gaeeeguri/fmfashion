@@ -4,7 +4,7 @@
 /**
  * @param {{ rates?: number[], maxInFlight?: number, pauseMs?: number, windowMs?: number, threshold?: number,
  *   warmupMs?: number, clock: { now: () => number, sleep: (ms: number) => Promise<void> },
- *   initial?: { rateIndex: number, recent429s: number[] } }} o
+ *   initial?: { rateIndex: number, recent429s: number[], pausedUntil?: number|null } }} o
  */
 export function createRateGate({
   rates = [2, 1.5, 1],
@@ -23,7 +23,7 @@ export function createRateGate({
   let recent429s = [...(initial?.recent429s ?? [])];
   let inFlight = 0;
   let nextAt = -Infinity; // earliest start time of the next request
-  let pausedUntil = -Infinity;
+  let pausedUntil = initial?.pausedUntil ?? -Infinity;
   const waiters = [];
   const wake = () => waiters.shift()?.();
 
@@ -69,6 +69,6 @@ export function createRateGate({
       }
       return { pausedUntil, rate: rates[rateIndex], lowered };
     },
-    snapshot: () => ({ rateIndex, recent429s: [...recent429s] }),
+    snapshot: () => ({ rateIndex, recent429s: [...recent429s], pausedUntil: Number.isFinite(pausedUntil) ? pausedUntil : null }),
   };
 }

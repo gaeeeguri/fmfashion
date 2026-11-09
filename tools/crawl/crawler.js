@@ -34,12 +34,13 @@ export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, 
     queue: (prev?.queue ?? []).filter((r) => !store.doneIds.has(r.docId)),
     rateIndex: prev?.rateIndex ?? 0,
     recent429s: prev?.recent429s ?? [],
+    pausedUntil: prev?.pausedUntil ?? null, // a 429 pause survives a restart: requesting inside it is what led to 430
     firedCheckpoints: prev?.firedCheckpoints ?? [],
     stopReason: null,
     startedAt: prev?.startedAt ?? clock.now(),
     updatedAt: clock.now(),
   };
-  const gate = createRateGate({ clock, rates: opts.rates, maxInFlight, warmupMs: opts.warmupMs ?? 0, initial: { rateIndex: state.rateIndex, recent429s: state.recent429s } });
+  const gate = createRateGate({ clock, rates: opts.rates, maxInFlight, warmupMs: opts.warmupMs ?? 0, initial: { rateIndex: state.rateIndex, recent429s: state.recent429s, pausedUntil: state.pausedUntil } });
   const queued = new Set(state.queue.map((r) => r.docId));
   const taken = new Set(); // rows being fetched right now
   let pending = []; // bodiless rows waiting to see whether this is a streak (spec §4.2)

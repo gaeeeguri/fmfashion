@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCrawl } from '../../../tools/crawl/crawler.js';
@@ -231,4 +231,18 @@ test('a list page that answers 429 three times in a row is skipped', async () =>
   const r = await t.run();
   expect(t.calls.filter((u) => u === listUrl(1))).toHaveLength(3);
   expect(r.postCount).toBe(1);
+});
+
+test('a restart inside a 429 pause waits out the rest of it before any request', async () => {
+  const t = setup({ routes: { [listUrl(1)]: ok(listHtml([11], 1)), '/11': [{ status: 429, html: '' }, ok(postHtml('x'))] }, opts: { maxInFlight: 1 } });
+  await t.run();
+  const pausedUntil = JSON.parse(readFileSync(join(t.dir, 'state.json'), 'utf8')).pausedUntil;
+  expect(pausedUntil).toBeGreaterThan(0);
+  // the next run's clock starts again at 0, i.e. the restart lands inside the saved pause
+  const again = setup({ dir: t.dir, routes: { [listUrl(1)]: ok(listHtml([12, 11], 1)) } });
+  const st = JSON.parse(readFileSync(join(t.dir, 'state.json'), 'utf8'));
+  writeFileSync(join(t.dir, 'state.json'), JSON.stringify({ ...st, sources: [{ category: null, nextPage: 1, lastPage: null }] }));
+  await again.run();
+  expect(again.calls).toContain('/12');
+  expect(again.at[0]).toBeGreaterThanOrEqual(pausedUntil);
 });
