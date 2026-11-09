@@ -3,6 +3,8 @@ import { parseList, parsePost, classify } from './parse.js';
 import { createRateGate } from './rateGate.js';
 
 const MAX_429_PER_URL = 3;
+// a post put back this many times (9 × 429) is given up on; a site-wide throttle cannot drain the queue into 'done'
+const MAX_DEFERRALS = 3;
 
 const listUrl = (category, page) => `/index.php?mid=fashion${category ? `&category=${category}` : ''}&page=${page}`;
 
@@ -36,6 +38,7 @@ export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, 
     recent429s: prev?.recent429s ?? [],
     pausedUntil: prev?.pausedUntil ?? null, // a 429 pause survives a restart: requesting inside it is what led to 430
     firedCheckpoints: prev?.firedCheckpoints ?? [],
+    skippedListPages: prev?.skippedListPages ?? [],
     stopReason: null,
     startedAt: prev?.startedAt ?? clock.now(),
     updatedAt: clock.now(),
@@ -108,7 +111,7 @@ export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, 
         const skip = url429s >= MAX_429_PER_URL;
         log(`429 on ${url} — pausing until ${new Date(r.pausedUntil).toISOString()}${r.lowered ? `, rate lowered to ${r.rate}/s` : ''}${skip ? ` · ${url429s} in a row, skipping it` : ''}`);
         save();
-        if (skip) return { cls: 'http-error', res };
+        if (skip) return { cls: 'rate-limited-skip', res };
         continue;
       }
       return { cls, res };
@@ -130,6 +133,13 @@ export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, 
     if (cls === 'stopped') return;
     if (cls === 'blocked') {
       stop = 'blocked';
+      return;
+    }
+    if (cls === 'rate-limited-skip') {
+      state.skippedListPages.push({ category: src.category, page: src.nextPage });
+      log(`list page ${src.nextPage} → 429 ×${MAX_429_PER_URL}, skipped (recorded in state.skippedListPages)`);
+      src.nextPage++;
+      save();
       return;
     }
     if (cls === 'http-error') {
@@ -162,7 +172,17 @@ export async function runCrawl({ fetchPage, waitForNetwork, store, clock, opts, 
       return;
     }
     const fetchedAt = clock.now();
-    if (cls === 'http-error') {
+    if (cls === 'rate-limited-skip' && (row.deferred429 ?? 0) + 1 < MAX_DEFERRALS) {
+      // to the back of the queue: a URL-specific 429 lets the others through, a site-wide one only delays
+      row.deferred429 = (row.deferred429 ?? 0) + 1;
+      const i = state.queue.findIndex((r) => r.docId === row.docId);
+      if (i >= 0) state.queue.push(...state.queue.splice(i, 1));
+      taken.delete(row.docId);
+      log(`/${row.docId} → 429 ×${MAX_429_PER_URL}, moved to the back of the queue (${row.deferred429}/${MAX_DEFERRALS - 1})`);
+      save();
+      return;
+    }
+    if (cls === 'http-error' || cls === 'rate-limited-skip') {
       store.appendPost({ ...meta(row), date: null, text: '', imgCount: 0, status: res.status, fetchedAt, unrecognized: true });
       finish(row);
     } else {

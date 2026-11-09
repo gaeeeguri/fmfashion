@@ -213,24 +213,31 @@ test('opts.rates sets the pace: 0.1/s starts requests 10s apart', async () => {
   expect(t.at.slice(0, 3)).toEqual([0, 10000, 20000]);
 });
 
-test('a post that answers 429 three times in a row is skipped (stored unrecognized) and the crawl goes on', async () => {
-  const t = setup({ routes: { [listUrl(1)]: ok(listHtml([11, 12], 1)), '/11': { status: 429, html: '' } } });
+test('a post that answers 429 three times in a row goes to the back of the queue, not into the done list', async () => {
+  const t = setup({ routes: { [listUrl(1)]: ok(listHtml([11, 12], 1)), '/11': [{ status: 429, html: '' }, { status: 429, html: '' }, { status: 429, html: '' }, ok(postHtml('나중에 받음'))] }, opts: { maxInFlight: 1 } });
   const r = await t.run();
   expect(r.reason).toBe('exhausted');
-  expect(postCalls(t.calls).filter((u) => u === '/11')).toHaveLength(3);
-  expect(postCalls(t.calls)).toContain('/12');
-  const p11 = postsIn(t.dir).find((p) => p.docId === '11');
-  expect(p11).toMatchObject({ unrecognized: true, status: 429 });
-  const again = await setup({ dir: t.dir, routes: { [listUrl(1)]: ok(listHtml([11, 12], 1)) } });
+  const calls = postCalls(t.calls);
+  expect(calls.indexOf('/12')).toBeLessThan(calls.lastIndexOf('/11'));
+  expect(postsIn(t.dir).find((p) => p.docId === '11')).toMatchObject({ text: '나중에 받음' });
+});
+
+test('a post deferred three times (nine 429s) is finally stored unrecognized and not refetched', async () => {
+  const t = setup({ routes: { [listUrl(1)]: ok(listHtml([11, 12], 1)), '/11': { status: 429, html: '' } } });
+  await t.run();
+  expect(postCalls(t.calls).filter((u) => u === '/11')).toHaveLength(9);
+  expect(postsIn(t.dir).find((p) => p.docId === '11')).toMatchObject({ unrecognized: true, status: 429 });
+  const again = setup({ dir: t.dir, routes: { [listUrl(1)]: ok(listHtml([11, 12], 1)) } });
   await again.run();
   expect(postCalls(again.calls)).toEqual([]);
 });
 
-test('a list page that answers 429 three times in a row is skipped', async () => {
+test('a list page that answers 429 three times in a row is skipped and recorded in state', async () => {
   const t = setup({ routes: { [listUrl(1)]: { status: 429, html: '' }, [listUrl(2)]: ok(listHtml([21], 2)) } });
   const r = await t.run();
   expect(t.calls.filter((u) => u === listUrl(1))).toHaveLength(3);
   expect(r.postCount).toBe(1);
+  expect(JSON.parse(readFileSync(join(t.dir, 'state.json'), 'utf8')).skippedListPages).toEqual([{ category: null, page: 1 }]);
 });
 
 test('a restart inside a 429 pause waits out the rest of it before any request', async () => {
