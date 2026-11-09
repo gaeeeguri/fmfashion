@@ -43,9 +43,10 @@ def load(tmp: Path):
 def test_auto_patterns_escape_korean_and_guard_latin():
     assert patterns_for(["러프사이드", "렆사"]) == ["러프사이드", "렆사"]
     assert patterns_for(["랄프 로렌"]) == ["랄프\\s?로렌"]
-    assert patterns_for(["rrl"]) == ["(?<![0-9A-Za-z])rrl(?![0-9A-Za-z])"]
-    assert patterns_for(["no.5"]) == ["(?<![0-9A-Za-z])no\\.5(?![0-9A-Za-z])"]
-    assert patterns_for(["808"]) == ["(?<![0-9A-Za-z])808(?![0-9A-Za-z])"]
+    g = lambda core: f"(?<![0-9A-Za-z])(?<!\\d[,.]){core}(?![0-9A-Za-z])(?![,.]\\d)"  # noqa: E731
+    assert patterns_for(["rrl"]) == [g("rrl")]
+    assert patterns_for(["no.5"]) == [g("no\\.5")]
+    assert patterns_for(["808"]) == [g("808")]
 
 
 def test_only_y_rows_are_written_and_existing_order_is_kept(tmp_path):
@@ -112,6 +113,9 @@ def test_generated_patterns_match_their_terms_in_titles():
     assert not any(re.search(p, "carrlot", re.I) for p in patterns_for(["rrl"]))
     assert not any(re.search(p, "2808 사이즈", re.I) for p in patterns_for(["808"]))
     assert any(re.search(p, "킨치 808 후기", re.I) for p in patterns_for(["808"]))
+    assert any(re.search(p, "킨치 808.", re.I) for p in patterns_for(["808"]))
+    for price in ["649,000원", "1,649원", "6.649"]:
+        assert not any(re.search(p, price) for p in patterns_for(["649"])), price
 
 
 def test_an_empty_exclude_list_is_not_a_change(tmp_path, capsys):
