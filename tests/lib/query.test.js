@@ -1,5 +1,6 @@
 import { test, expect } from 'vitest';
-import bundled from '../../dictionary/brands.json';
+// a frozen copy: these tests count requests per alias, so they must not follow edits to the live dictionary
+import bundled from './testDictionary.json';
 import { buildSearchJobs, buildSearchUrl, buildListJobs, buildListUrl, jobUrl } from '../../src/lib/query.js';
 
 test('expands aliases with hidden exclusions', () => {

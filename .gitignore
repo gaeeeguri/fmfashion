@@ -3,3 +3,9 @@ dist/
 .superpowers/
 *.zip
 tests/fixtures/
+
+# crawled fmkorea posts (other users' content) — local only
+/fmf-*.json
+/data/
+tools/lexicon/.venv/
+__pycache__/

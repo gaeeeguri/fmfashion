@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>브랜드 검토</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --card: #fff; --ink: #1d1d1b; --sub: #6b6b66; --line: #e3e3de;
+    --y: #1f7a4d; --y-bg: #e3f3ea; --q: #9a6b00; --q-bg: #fbf1d6; --n: #8a8a85; --n-bg: #ededea;
+    --accent: #2f5bd3; --chip: #eef1fb; --sug: #f3f3f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --card: #1f1f1d; --ink: #ecece8; --sub: #9d9d97; --line: #33332f;
+      --y: #6fd39f; --y-bg: #17352a; --q: #f0c45c; --q-bg: #3a3017; --n: #9d9d97; --n-bg: #2a2a27;
+      --accent: #8aa7ff; --chip: #26304d; --sug: #2a2a27;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  h1 { font-size: 16px; margin: 0 8px 0 0; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; color: var(--ink); padding: 5px 10px; cursor: pointer; font: inherit; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--ink); color: var(--bg); }
+  input, select, textarea { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; }
+  textarea { width: 100%; min-height: 54px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .btn { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .spacer { flex: 1; }
+  .dirty { color: var(--q); font-weight: 600; }
+  main { padding: 14px 16px 80px; max-width: 1400px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; }
+  .card.y { border-left-color: var(--y); } .card.q { border-left-color: var(--q); } .card.n { border-left-color: var(--n); opacity: .8; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .dec button { padding: 3px 9px; }
+  .dec button.on.y { background: var(--y-bg); color: var(--y); }
+  .dec button.on.q { background: var(--q-bg); color: var(--q); }
+  .dec button.on.n { background: var(--n-bg); color: var(--n); }
+  .name { font-weight: 600; width: 9.5em; }
+  .en { width: 9em; }
+  .id { width: 9em; font-size: 12px; color: var(--sub); }
+  .label { font-size: 12px; color: var(--sub); min-width: 5.2em; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; flex: 1; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; background: var(--chip); border-radius: 999px; padding: 2px 4px 2px 9px; cursor: pointer; }
+  .chip.main { outline: 1.5px solid var(--accent); }
+  .chip .x { border: 0; background: transparent; color: var(--sub); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; }
+  .sug { display: inline-flex; gap: 3px; background: var(--sug); color: var(--ink); border: 1px dashed var(--line); border-radius: 999px; padding: 1px 9px; cursor: pointer; font: inherit; font-size: 13px; }
+  .sug:hover { border-color: var(--accent); }
+  .sug small { color: var(--sub); }
+  .add { width: 8em; font-size: 13px; }
+  .memo { font-size: 12.5px; color: var(--sub); }
+  details summary { cursor: pointer; font-size: 12.5px; color: var(--sub); }
+  .ex { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  #out { white-space: pre-wrap; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 12.5px/1.5 ui-monospace, Menlo, monospace; margin-bottom: 14px; }
+  #out[hidden], #groups[hidden] { display: none; }
+  #groups { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; display: grid; gap: 6px; }
+  .count { color: var(--sub); font-size: 13px; }
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>브랜드 검토</h1>
+  <div class="seg" id="fdec"></div>
+  <select id="fgroup"></select>
+  <input id="fq" placeholder="이름·검색어 찾기" />
+  <span class="count" id="count"></span>
+  <span class="spacer"></span>
+  <span id="state" class="count"></span>
+  <button class="btn" id="bgroups">그룹 편집</button>
+  <button class="btn" id="bnew">+ 브랜드</button>
+  <button class="btn" id="bsave">저장 ⌘S</button>
+  <button class="btn" id="bpreview">미리보기</button>
+  <button class="btn primary" id="bapply">brands.json에 반영</button>
+</header>
+<main>
+  <div id="groups" hidden></div>
+  <div id="out" hidden></div>
+  <div class="grid" id="grid"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids.filter((k) => k != null)); return e; };
+const list = (s) => (s || '').split(';').map((x) => x.trim()).filter(Boolean);
+const join = (a) => a.join(';');
+const DEC = [['y', '넣기'], ['?', '보류'], ['n', '빼기']];
+const cls = (d) => (d === 'y' ? 'y' : d === 'n' ? 'n' : 'q');
+
+let rows = [], groups = [], sug = {}, dirty = false;
+const filt = { dec: 'all', group: '', q: '' };
+
+function setDirty(v) { dirty = v; $('state').textContent = v ? '저장 안 됨' : '저장됨'; $('state').className = v ? 'dirty' : 'count'; }
+function change(r, k, v) { r[k] = v; setDirty(true); }
+
+async function load() {
+  const d = await (await fetch('/api/data')).json();
+  rows = d.rows; groups = d.groups; sug = d.suggestions;
+  setDirty(false); renderFilters(); render();
+}
+
+function renderFilters() {
+  const n = (d) => rows.filter((r) => (d === 'all' ? true : (r.결정 || '?') === d)).length;
+  $('fdec').replaceChildren(...[['all', '전체'], ...DEC].map(([k, t]) =>
+    el('button', { className: filt.dec === k ? 'on' : '', textContent: `${t} ${n(k)}`, onclick: () => { filt.dec = k; renderFilters(); render(); } })));
+  $('fgroup').replaceChildren(el('option', { value: '', textContent: '모든 그룹' }), ...groups.map((g) => el('option', { value: g.id, textContent: g.이름 })));
+  $('fgroup').value = filt.group;
+}
+
+function visible() {
+  const q = filt.q.toLowerCase();
+  return rows.filter((r) => (filt.dec === 'all' || (r.결정 || '?') === filt.dec)
+    && (!filt.group || r.그룹 === filt.group)
+    && (!q || [r.이름, r.영문, r.id, r.검색어].join(' ').toLowerCase().includes(q)));
+}
+
+function chipEditor(r, key, { mainFirst = false } = {}) {
+  const terms = list(r[key]);
+  const wrap = el('div', { className: 'chips' });
+  const redraw = () => wrap.replaceWith(chipEditor(r, key, { mainFirst }));
+  terms.forEach((t, i) => wrap.append(el('span', {
+    className: 'chip' + (mainFirst && i === 0 ? ' main' : ''),
+    title: mainFirst && i > 0 ? '클릭하면 대표 검색어로' : '',
+    onclick: () => { if (!mainFirst || i === 0) return; change(r, key, join([t, ...terms.filter((x) => x !== t)])); redraw(); },
+  }, t, el('button', { className: 'x', textContent: '×', title: '빼기', onclick: (e) => { e.stopPropagation(); change(r, key, join(terms.filter((x) => x !== t))); redraw(); } }))));
+  const input = el('input', { className: 'add', placeholder: '+ 추가 (Enter)' });
+  input.onkeydown = (e) => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    const add = list(input.value.replaceAll(',', ';')).filter((x) => !terms.some((t) => t.toLowerCase() === x.toLowerCase()));
+    if (add.length) { change(r, key, join([...terms, ...add])); redraw(); }
+  };
+  wrap.append(input);
+  return wrap;
+}
+
+function suggestions(r, kind, label) {
+  const have = new Set(list(r.검색어).map((x) => x.toLowerCase()));
+  const items = (sug[r.id]?.[kind] || []).filter(([w]) => !have.has(w.toLowerCase()));
+  if (!items.length) return null;
+  return el('div', { className: 'row' }, el('span', { className: 'label', textContent: label }),
+    el('div', { className: 'chips' }, ...items.map(([w, c]) => el('button', {
+      className: 'sug', title: '검색어에 추가',
+      onclick: () => { change(r, '검색어', join([...list(r.검색어), w])); render(); },
+    }, `+ ${w}`, el('small', { textContent: String(c) })))));
+}
+
+function card(r) {
+  const d = r.결정 || '?';
+  const c = el('div', { className: `card ${cls(d)}` });
+  const dec = el('div', { className: 'seg dec' }, ...DEC.map(([k, t]) => el('button', {
+    className: d === k ? `on ${cls(k)}` : '', textContent: t,
+    onclick: () => { change(r, '결정', k); renderFilters(); if (filt.dec !== 'all') render(); else c.replaceWith(card(r)); },
+  })));
+  const gsel = el('select', { onchange: (e) => change(r, '그룹', e.target.value) },
+    ...groups.map((g) => el('option', { value: g.id, textContent: g.이름 })));
+  gsel.value = r.그룹;
+  if (!groups.some((g) => g.id === r.그룹)) gsel.prepend(el('option', { value: r.그룹, textContent: `(없는 그룹: ${r.그룹})` })), (gsel.value = r.그룹);
+  c.append(
+    el('div', { className: 'row' }, dec,
+      el('input', { className: 'name', value: r.이름, placeholder: '이름', oninput: (e) => change(r, '이름', e.target.value) }),
+      el('input', { className: 'en', value: r.영문, placeholder: '영문', oninput: (e) => change(r, '영문', e.target.value) }),
+      gsel),
+    el('div', { className: 'row' }, el('span', { className: 'label', textContent: '검색어' }), chipEditor(r, '검색어', { mainFirst: true })),
+    suggestions(r, 'variants', '변형 후보'),
+    suggestions(r, 'follow', '제품 후보'),
+    el('div', { className: 'row' }, el('span', { className: 'label', textContent: '제외어' }), chipEditor(r, '제외')),
+    r.메모 || r.글수 ? el('div', { className: 'memo', textContent: [r.확신 && `확신 ${r.확신}`, r.글수 && `글 수 ${r.글수}`, r.메모].filter(Boolean).join(' · ') } ) : null,
+    el('details', {},
+      el('summary', { textContent: '패턴 · id · 예문' }),
+      el('div', { className: 'row' }, el('span', { className: 'label', textContent: 'id' }),
+        el('input', { className: 'id', value: r.id, oninput: (e) => change(r, 'id', e.target.value) })),
+      el('div', { className: 'memo', textContent: '패턴 (한 줄에 하나, 비우면 검색어로 자동 생성)' }),
+      el('textarea', { value: list(r.패턴).join('\n'), oninput: (e) => change(r, '패턴', join(e.target.value.split('\n'))) }),
+      r.예문 ? el('div', { className: 'ex', textContent: r.예문 }) : null),
+  );
+  return c;
+}
+
+function render() {
+  const v = visible();
+  $('count').textContent = `${v.length}개 표시`;
+  $('grid').replaceChildren(...v.map(card));
+}
+
+function renderGroups() {
+  const box = $('groups');
+  box.replaceChildren(
+    el('div', { className: 'memo', textContent: '그룹 이름은 익스텐션 패널에 그대로 보입니다. id는 영문 소문자로.' }),
+    ...groups.map((g, i) => el('div', { className: 'row' },
+      el('input', { className: 'id', value: g.id, oninput: (e) => { g.id = e.target.value; setDirty(true); } }),
+      el('input', { value: g.이름, oninput: (e) => { g.이름 = e.target.value; setDirty(true); renderFilters(); } }),
+      el('span', { className: 'count', textContent: `${rows.filter((r) => r.그룹 === g.id && r.결정 === 'y').length}개` }),
+      el('button', { className: 'btn', textContent: '삭제', onclick: () => { groups.splice(i, 1); setDirty(true); renderGroups(); renderFilters(); render(); } }))),
+    el('div', {}, el('button', { className: 'btn', textContent: '+ 그룹', onclick: () => { groups.push({ id: 'new', 이름: '새 그룹' }); setDirty(true); renderGroups(); renderFilters(); } })),
+  );
+}
+
+async function save() {
+  const r = await fetch('/api/save', { method: 'POST', body: JSON.stringify({ rows, groups }) });
+  if (!r.ok) { alert('저장 실패: ' + (await r.text())); return false; }
+  setDirty(false); return true;
+}
+
+async function runStep(path, busyText) {
+  if (dirty && !(await save())) return;
+  const out = $('out');
+  out.hidden = false; out.textContent = busyText;
+  const r = await (await fetch(path, { method: 'POST' })).json();
+  out.textContent = r.output || r.error || '';
+  out.scrollIntoView({ block: 'nearest' });
+}
+
+$('fgroup').onchange = (e) => { filt.group = e.target.value; render(); };
+$('fq').oninput = (e) => { filt.q = e.target.value; render(); };
+$('bsave').onclick = save;
+$('bpreview').onclick = () => runStep('/api/preview', '미리보기 실행 중…');
+$('bapply').onclick = () => { if (confirm('y로 표시한 브랜드로 dictionary/brands.json을 바꿉니다. 계속할까요?')) runStep('/api/apply', '반영하고 익스텐션 테스트 실행 중…'); };
+$('bgroups').onclick = () => { const g = $('groups'); g.hidden = !g.hidden; if (!g.hidden) renderGroups(); };
+$('bnew').onclick = () => {
+  rows.unshift({ 결정: 'y', id: 'new-brand', 이름: '', 영문: '', 그룹: groups[0]?.id || '', 검색어: '', 패턴: '', 제외: '', 글수: '', 확신: '', 메모: '직접 추가', 예문: '' });
+  filt.dec = 'all'; filt.q = ''; $('fq').value = ''; setDirty(true); renderFilters(); render();
+};
+addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); save(); } });
+addEventListener('beforeunload', (e) => { if (dirty) e.preventDefault(); });
+load();
+</script>
+</body>
+</html>

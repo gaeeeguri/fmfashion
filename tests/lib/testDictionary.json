@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "version": "2026.11.02",
+  "updatedAt": "2026-11-02T00:00:00+09:00",
+  "categories": [
+    { "key": "all", "name": "전체", "ids": [], "excludeIds": ["210029879", "209960683", "5263961399"] },
+    { "key": "fit", "name": "착샷", "ids": ["18910473", "186586714"] },
+    { "key": "question", "name": "질문", "ids": ["4022646597"] },
+    { "key": "review", "name": "후기", "ids": ["186586204", "209943299"] },
+    { "key": "info", "name": "정보", "ids": ["3205536965", "4651215573", "6280361687"] }
+  ],
+  "groups": [
+    { "id": "street", "name": "스트릿 · 캐주얼" },
+    { "id": "minimal", "name": "미니멀" }
+  ],
+  "brands": [
+    {
+      "id": "steadyeverywhere",
+      "name": "스테디에브리웨어",
+      "nameEn": "steadyeverywhere",
+      "group": "street",
+      "searchTerms": ["스테디에브리웨어", "스테디", "스에웨", "SEW", "스웨에"],
+      "matchPatterns": ["스테디", "스에웨", "(?<![A-Za-z])SEW(?![A-Za-z])", "스웨에+엑?"],
+      "exclude": []
+    },
+    {
+      "id": "anotheroffice",
+      "name": "어나더오피스",
+      "nameEn": "anotheroffice",
+      "group": "minimal",
+      "searchTerms": ["어나더오피스", "목동"],
+      "matchPatterns": ["어나더\\s?오피스", "목동"],
+      "note": "과거 이슈로 '목동'으로 불림"
+    },
+    {
+      "id": "paf",
+      "name": "PAF",
+      "nameEn": "paf",
+      "group": "street",
+      "searchTerms": ["파프"],
+      "matchPatterns": ["파프(?!터)", "(?<![A-Za-z])PAF(?![A-Za-z])"],
+      "exclude": ["파프터"]
+    },
+    {
+      "id": "fafter",
+      "name": "파프터",
+      "nameEn": "fafter",
+      "group": "minimal",
+      "searchTerms": ["파프터"],
+      "matchPatterns": ["파프터", "(?<![A-Za-z])fafter(?![A-Za-z])"]
+    },
+    {
+      "id": "firstfloor",
+      "name": "퍼스트플로어",
+      "nameEn": "firstfloor",
+      "group": "street",
+      "searchTerms": ["퍼스트플로어", "퍼플"],
+      "matchPatterns": ["퍼스트\\s?플로어", "퍼플", "(?<![A-Za-z])first\\s?floor(?![A-Za-z])"]
+    },
+    {
+      "id": "eastlogue",
+      "name": "이스트로그",
+      "nameEn": "eastlogue",
+      "group": "street",
+      "searchTerms": ["이스트로그"],
+      "matchPatterns": ["이스트로그", "(?<![A-Za-z])eastlogue(?![A-Za-z])"]
+    },
+    {
+      "id": "pottery",
+      "name": "포터리",
+      "nameEn": "pottery",
+      "group": "minimal",
+      "searchTerms": ["포터리"],
+      "matchPatterns": ["포터리", "(?<![A-Za-z])pottery(?![A-Za-z])"]
+    }
+  ]
+}
