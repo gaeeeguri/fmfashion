@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { expect } from 'vitest';
 import { fixture, ftest } from './fixtures.js';
-import bundled from '../../dictionary/brands.json';
+// a frozen copy: these tests count requests per alias, so they must not follow edits to the live dictionary
+import bundled from './testDictionary.json';
 import { compileMatchers } from '../../src/lib/matcher.js';
 import { createSearchSession } from '../../src/lib/searchSession.js';
 
